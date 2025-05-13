@@ -7,7 +7,6 @@ import edu.kit.kastel.vads.compiler.parser.ast.LValueIdentTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NameTree;
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor;
 import edu.kit.kastel.vads.compiler.parser.visitor.Unit;
-import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
 
@@ -33,19 +32,19 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         return NoOpVisitor.super.visit(assignmentTree, data);
     }
 
-    private static void checkDeclared(NameTree name, @Nullable VariableStatus status) {
+    private static void checkDeclared(NameTree name, VariableStatus status) {
         if (status == null) {
             throw new SemanticException("Variable " + name + " must be declared before assignment");
         }
     }
 
-    private static void checkInitialized(NameTree name, @Nullable VariableStatus status) {
+    private static void checkInitialized(NameTree name, VariableStatus status) {
         if (status == null || status == VariableStatus.DECLARED) {
             throw new SemanticException("Variable " + name + " must be initialized before use");
         }
     }
 
-    private static void checkUndeclared(NameTree name, @Nullable VariableStatus status) {
+    private static void checkUndeclared(NameTree name, VariableStatus status) {
         if (status != null) {
             throw new SemanticException("Variable " + name + " is already declared");
         }

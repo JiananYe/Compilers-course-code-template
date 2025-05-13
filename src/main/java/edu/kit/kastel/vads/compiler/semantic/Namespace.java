@@ -2,7 +2,6 @@ package edu.kit.kastel.vads.compiler.semantic;
 
 import edu.kit.kastel.vads.compiler.parser.ast.NameTree;
 import edu.kit.kastel.vads.compiler.parser.symbol.Name;
-import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,7 +19,7 @@ public class Namespace<T> {
         this.content.merge(name.name(), value, merger);
     }
 
-    public @Nullable T get(NameTree name) {
+    public T get(NameTree name) {
         return this.content.get(name.name());
     }
 }

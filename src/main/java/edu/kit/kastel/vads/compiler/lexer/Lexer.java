@@ -4,7 +4,6 @@ import edu.kit.kastel.vads.compiler.Position;
 import edu.kit.kastel.vads.compiler.Span;
 import edu.kit.kastel.vads.compiler.lexer.Operator.OperatorType;
 import edu.kit.kastel.vads.compiler.lexer.Separator.SeparatorType;
-import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
 
@@ -56,7 +55,7 @@ public class Lexer {
         return Optional.of(t);
     }
 
-    private @Nullable ErrorToken skipWhitespace() {
+    private ErrorToken skipWhitespace() {
         enum CommentType {
             SINGLE_LINE,
             MULTI_LINE
