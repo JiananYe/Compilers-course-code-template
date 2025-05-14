@@ -27,15 +27,22 @@ public class CodeGenerator {
 
     public String generateCode(List<IrGraph> program) {
         StringBuilder builder = new StringBuilder();
+        builder.append(".global main\n");
+        builder.append(".global _main\n");
+        builder.append(".text\n");
+        builder.append("main:\n");
+        builder.append("    call _main\n");
+        builder.append("    movq %rax, %rdi\n");
+        builder.append("    movq $0x3C, %rax\n");
+        builder.append("    syscall\n");
+        builder.append("_main:\n");
+        
         for (IrGraph graph : program) {
             AasmRegisterAllocator allocator = new AasmRegisterAllocator();
             Map<Node, Register> registers = allocator.allocateRegisters(graph);
-            builder.append("function ")
-                .append(graph.name())
-                .append(" {\n");
             generateForGraph(graph, builder, registers);
-            builder.append("}");
         }
+        
         return builder.toString();
     }
 
@@ -52,38 +59,38 @@ public class CodeGenerator {
         }
 
         switch (node) {
-            case AddNode add -> binary(builder, registers, add, "add");
-            case SubNode sub -> binary(builder, registers, sub, "sub");
-            case MulNode mul -> binary(builder, registers, mul, "mul");
-            case DivNode div -> binary(builder, registers, div, "div");
-            case ModNode mod -> binary(builder, registers, mod, "mod");
-            case ReturnNode r -> builder.repeat(" ", 2).append("ret ")
-                .append(registers.get(predecessorSkipProj(r, ReturnNode.RESULT)));
-            case ConstIntNode c -> builder.repeat(" ", 2)
-                .append(registers.get(c))
-                .append(" = const ")
-                .append(c.value());
-            case Phi _ -> throw new UnsupportedOperationException("phi");
+            case AddNode add -> {
+                Register result = registers.get(add);
+                Register left = registers.get(predecessorSkipProj(add, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(add, BinaryOperationNode.RIGHT));
+                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                builder.append("    addq ").append(getRegisterName(right)).append(", %rax\n");
+                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+            }
+            case ConstIntNode c -> {
+                Register reg = registers.get(c);
+                builder.append("    movq $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
+            }
+            case ReturnNode r -> {
+                Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
+                builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
+                builder.append("    ret\n");
+            }
             case Block _, ProjNode _, StartNode _ -> {
-                // do nothing, skip line break
+                // do nothing
                 return;
             }
+            default -> throw new UnsupportedOperationException("Unsupported node type: " + node.getClass().getSimpleName());
         }
-        builder.append("\n");
     }
 
-    private static void binary(
-        StringBuilder builder,
-        Map<Node, Register> registers,
-        BinaryOperationNode node,
-        String opcode
-    ) {
-        builder.repeat(" ", 2).append(registers.get(node))
-            .append(" = ")
-            .append(opcode)
-            .append(" ")
-            .append(registers.get(predecessorSkipProj(node, BinaryOperationNode.LEFT)))
-            .append(" ")
-            .append(registers.get(predecessorSkipProj(node, BinaryOperationNode.RIGHT)));
+    private String getRegisterName(Register reg) {
+        // Convert abstract register names to x86-64 register names
+        return switch (reg.toString()) {
+            case "%0" -> "%rbx";
+            case "%1" -> "%rcx";
+            case "%2" -> "%rdx";
+            default -> throw new IllegalArgumentException("Unsupported register: " + reg);
+        };
     }
 }
