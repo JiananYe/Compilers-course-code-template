@@ -41,9 +41,24 @@ public class Main {
             graphs.add(translation.translate());
         }
 
-        // TODO: generate assembly and invoke gcc instead of generating abstract assembly
         String s = new CodeGenerator().generateCode(graphs);
-        Files.writeString(output, s);
+        Path asmFile = output.resolveSibling(output.getFileName() + ".s");
+        Files.writeString(asmFile, s);
+
+        // Compile with GCC
+        ProcessBuilder pb = new ProcessBuilder("gcc", "-o", output.toString(), asmFile.toString());
+        try {
+            Process p = pb.start();
+            int exitCode = p.waitFor();
+            if (exitCode != 0) {
+                System.err.println("GCC compilation failed with exit code " + exitCode);
+                System.exit(1);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("GCC compilation was interrupted");
+            System.exit(1);
+        }
     }
 
     private static ProgramTree lexAndParse(Path input) throws IOException {
