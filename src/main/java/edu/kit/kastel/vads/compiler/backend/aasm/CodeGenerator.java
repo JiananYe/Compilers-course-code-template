@@ -1,6 +1,7 @@
 package edu.kit.kastel.vads.compiler.backend.aasm;
 
 import edu.kit.kastel.vads.compiler.backend.regalloc.Register;
+import edu.kit.kastel.vads.compiler.backend.regalloc.RegisterAllocator;
 import edu.kit.kastel.vads.compiler.ir.IrGraph;
 import edu.kit.kastel.vads.compiler.ir.node.AddNode;
 import edu.kit.kastel.vads.compiler.ir.node.BinaryOperationNode;
@@ -33,7 +34,7 @@ public class CodeGenerator {
         builder.append("main:\n");
         builder.append("    call _main\n");
         builder.append("    movq %rax, %rdi\n");
-        builder.append("    movq $60, %rax\n");
+        builder.append("    movq $0x3C, %rax\n");
         builder.append("    syscall\n");
         builder.append("_main:\n");
         builder.append("    pushq %rbp\n");
@@ -44,7 +45,7 @@ public class CodeGenerator {
         builder.append("    pushq %rdx\n");
         
         for (IrGraph graph : program) {
-            AasmRegisterAllocator allocator = new AasmRegisterAllocator();
+            RegisterAllocator allocator = new GraphColoringRegisterAllocator();
             Map<Node, Register> registers = allocator.allocateRegisters(graph);
             generateForGraph(graph, builder, registers);
         }
@@ -100,18 +101,30 @@ public class CodeGenerator {
                 Register result = registers.get(div);
                 Register left = registers.get(predecessorSkipProj(div, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(div, BinaryOperationNode.RIGHT));
+                
+                // First move the dividend to %rax
                 builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                // Then move the divisor to %rcx
+                builder.append("    movq ").append(getRegisterName(right)).append(", %rcx\n");
+                // Sign extend %rax into %rdx for signed division
                 builder.append("    cqto\n");
-                builder.append("    idivq ").append(getRegisterName(right)).append("\n");
+                // Use idivq for signed division
+                builder.append("    idivq %rcx\n");
                 builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
             }
             case ModNode mod -> {
                 Register result = registers.get(mod);
                 Register left = registers.get(predecessorSkipProj(mod, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(mod, BinaryOperationNode.RIGHT));
+                
+                // First move the dividend to %rax
                 builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                // Then move the divisor to %rcx
+                builder.append("    movq ").append(getRegisterName(right)).append(", %rcx\n");
+                // Sign extend %rax into %rdx for signed division
                 builder.append("    cqto\n");
-                builder.append("    idivq ").append(getRegisterName(right)).append("\n");
+                // Use idivq for signed division
+                builder.append("    idivq %rcx\n");
                 builder.append("    movq %rdx, ").append(getRegisterName(result)).append("\n");
             }
             case ConstIntNode c -> {
@@ -120,7 +133,9 @@ public class CodeGenerator {
             }
             case ReturnNode r -> {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
-                builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
+                if (result != null) {
+                    builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
+                }
             }
             case Phi phi -> {
                 throw new UnsupportedOperationException("phi");
