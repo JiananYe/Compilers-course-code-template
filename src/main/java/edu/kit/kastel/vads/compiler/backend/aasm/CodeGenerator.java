@@ -67,6 +67,40 @@ public class CodeGenerator {
                 builder.append("    addq ").append(getRegisterName(right)).append(", %rax\n");
                 builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
             }
+            case SubNode sub -> {
+                Register result = registers.get(sub);
+                Register left = registers.get(predecessorSkipProj(sub, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(sub, BinaryOperationNode.RIGHT));
+                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                builder.append("    subq ").append(getRegisterName(right)).append(", %rax\n");
+                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+            }
+            case MulNode mul -> {
+                Register result = registers.get(mul);
+                Register left = registers.get(predecessorSkipProj(mul, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(mul, BinaryOperationNode.RIGHT));
+                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                builder.append("    imulq ").append(getRegisterName(right)).append(", %rax\n");
+                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+            }
+            case DivNode div -> {
+                Register result = registers.get(div);
+                Register left = registers.get(predecessorSkipProj(div, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(div, BinaryOperationNode.RIGHT));
+                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                builder.append("    cqto\n");
+                builder.append("    idivq ").append(getRegisterName(right)).append("\n");
+                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+            }
+            case ModNode mod -> {
+                Register result = registers.get(mod);
+                Register left = registers.get(predecessorSkipProj(mod, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(mod, BinaryOperationNode.RIGHT));
+                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
+                builder.append("    cqto\n");
+                builder.append("    idivq ").append(getRegisterName(right)).append("\n");
+                builder.append("    movq %rdx, ").append(getRegisterName(result)).append("\n");
+            }
             case ConstIntNode c -> {
                 Register reg = registers.get(c);
                 builder.append("    movq $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
@@ -75,6 +109,9 @@ public class CodeGenerator {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
                 builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
                 builder.append("    ret\n");
+            }
+            case Phi phi -> {
+                throw new UnsupportedOperationException("phi");
             }
             case Block _, ProjNode _, StartNode _ -> {
                 // do nothing
