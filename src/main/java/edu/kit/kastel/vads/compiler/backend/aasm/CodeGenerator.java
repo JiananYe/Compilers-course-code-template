@@ -33,15 +33,28 @@ public class CodeGenerator {
         builder.append("main:\n");
         builder.append("    call _main\n");
         builder.append("    movq %rax, %rdi\n");
-        builder.append("    movq $0x3C, %rax\n");
+        builder.append("    movq $60, %rax\n");
         builder.append("    syscall\n");
         builder.append("_main:\n");
+        builder.append("    pushq %rbp\n");
+        builder.append("    movq %rsp, %rbp\n");
+        builder.append("    subq $1024, %rsp\n");
+        builder.append("    pushq %rbx\n");
+        builder.append("    pushq %rcx\n");
+        builder.append("    pushq %rdx\n");
         
         for (IrGraph graph : program) {
             AasmRegisterAllocator allocator = new AasmRegisterAllocator();
             Map<Node, Register> registers = allocator.allocateRegisters(graph);
             generateForGraph(graph, builder, registers);
         }
+        
+        builder.append("    popq %rdx\n");            // Restore callee-saved registers
+        builder.append("    popq %rcx\n");
+        builder.append("    popq %rbx\n");
+        builder.append("    movq %rbp, %rsp\n");      // Restore stack pointer
+        builder.append("    popq %rbp\n");            // Restore base pointer
+        builder.append("    ret\n");                   // Return with result in %rax
         
         return builder.toString();
     }
@@ -108,7 +121,6 @@ public class CodeGenerator {
             case ReturnNode r -> {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
                 builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
-                builder.append("    ret\n");
             }
             case Phi phi -> {
                 throw new UnsupportedOperationException("phi");
@@ -123,11 +135,23 @@ public class CodeGenerator {
 
     private String getRegisterName(Register reg) {
         // Convert abstract register names to x86-64 register names
-        return switch (reg.toString()) {
-            case "%0" -> "%rbx";
-            case "%1" -> "%rcx";
-            case "%2" -> "%rdx";
-            default -> throw new IllegalArgumentException("Unsupported register: " + reg);
-        };
+        String regName = reg.toString();
+        if (regName.startsWith("%")) {
+            int regNum = Integer.parseInt(regName.substring(1));
+            if (regNum < 3) {
+                return switch (regNum) {
+                    case 0 -> "%rbx";
+                    case 1 -> "%rcx";
+                    case 2 -> "%rdx";
+                    default -> throw new IllegalArgumentException("Unsupported register: " + reg);
+                };
+            } else {
+                // For registers beyond %2, use stack locations
+                // Each stack slot is 8 bytes (64 bits)
+                int stackOffset = (regNum - 3) * 8;
+                return stackOffset + "(%rsp)";
+            }
+        }
+        throw new IllegalArgumentException("Invalid register format: " + reg);
     }
 }
