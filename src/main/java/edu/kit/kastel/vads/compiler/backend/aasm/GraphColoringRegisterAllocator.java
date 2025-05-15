@@ -3,15 +3,7 @@ package edu.kit.kastel.vads.compiler.backend.aasm;
 import edu.kit.kastel.vads.compiler.backend.regalloc.Register;
 import edu.kit.kastel.vads.compiler.backend.regalloc.RegisterAllocator;
 import edu.kit.kastel.vads.compiler.ir.IrGraph;
-import edu.kit.kastel.vads.compiler.ir.node.Node;
-import edu.kit.kastel.vads.compiler.ir.node.ProjNode;
-import edu.kit.kastel.vads.compiler.ir.node.StartNode;
-import edu.kit.kastel.vads.compiler.ir.node.Block;
-import edu.kit.kastel.vads.compiler.ir.node.ReturnNode;
-import edu.kit.kastel.vads.compiler.ir.node.ConstIntNode;
-import edu.kit.kastel.vads.compiler.ir.node.DivNode;
-import edu.kit.kastel.vads.compiler.ir.node.ModNode;
-import edu.kit.kastel.vads.compiler.ir.node.BinaryOperationNode;
+import edu.kit.kastel.vads.compiler.ir.node.*;
 import edu.kit.kastel.vads.compiler.ir.util.NodeSupport;
 
 import java.util.*;
@@ -22,14 +14,92 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
     private final Map<Node, Register> registers = new HashMap<>();
     private final Stack<Node> stack = new Stack<>();
     private final Set<Node> spillCandidates = new HashSet<>();
+    private final Map<Node, Set<Node>> moveRelated = new HashMap<>();
     private int nextConstReg = 0;
 
     @Override
     public Map<Node, Register> allocateRegisters(IrGraph graph) {
         buildInterferenceGraph(graph);
+        buildMoveRelated(graph);
+        maximumCardinalitySearch();
+        coalesce();
         simplify();
         select();
         return Map.copyOf(registers);
+    }
+
+    private void buildMoveRelated(IrGraph graph) {
+        // Find nodes that are related by moves (same value)
+        Set<Node> visited = new HashSet<>();
+        scanForMoves(graph.endBlock(), visited);
+    }
+
+    private void scanForMoves(Node node, Set<Node> visited) {
+        if (!visited.add(node)) {
+            return;
+        }
+
+        // Check if this node is a move (same value as its predecessor)
+        if (node instanceof ProjNode) {
+            Node source = node.predecessor(ProjNode.IN);
+            if (source instanceof ConstIntNode) {
+                moveRelated.computeIfAbsent(source, k -> new HashSet<>()).add(node);
+                moveRelated.computeIfAbsent(node, k -> new HashSet<>()).add(source);
+            }
+        }
+
+        for (Node predecessor : node.predecessors()) {
+            scanForMoves(predecessor, visited);
+        }
+    }
+
+    private void maximumCardinalitySearch() {
+        // MCS algorithm for better node ordering
+        Set<Node> unprocessed = new HashSet<>(interferenceGraph.keySet());
+        Map<Node, Integer> weights = new HashMap<>();
+        
+        while (!unprocessed.isEmpty()) {
+            // Find node with maximum weight
+            Node maxNode = null;
+            int maxWeight = -1;
+            for (Node node : unprocessed) {
+                int weight = weights.getOrDefault(node, 0);
+                if (weight > maxWeight) {
+                    maxWeight = weight;
+                    maxNode = node;
+                }
+            }
+            
+            // Add to stack and update weights
+            stack.push(maxNode);
+            unprocessed.remove(maxNode);
+            
+            // Update weights of neighbors
+            for (Node neighbor : interferenceGraph.get(maxNode)) {
+                if (unprocessed.contains(neighbor)) {
+                    weights.merge(neighbor, 1, Integer::sum);
+                }
+            }
+        }
+    }
+
+    private void coalesce() {
+        // Coalesce non-interfering move-related nodes
+        boolean changed;
+        do {
+            changed = false;
+            for (Node node : new HashSet<>(interferenceGraph.keySet())) {
+                Set<Node> related = moveRelated.getOrDefault(node, Collections.emptySet());
+                for (Node relatedNode : related) {
+                    if (!interferes(node, relatedNode)) {
+                        // Coalesce the nodes
+                        interferenceGraph.get(node).addAll(interferenceGraph.get(relatedNode));
+                        interferenceGraph.remove(relatedNode);
+                        changed = true;
+                    }
+                }
+            }
+        } while (changed);
     }
 
     private void buildInterferenceGraph(IrGraph graph) {
