@@ -40,7 +40,16 @@ public class Lexer {
             case '*' -> singleOrAssign(OperatorType.MUL, OperatorType.ASSIGN_MUL);
             case '/' -> singleOrAssign(OperatorType.DIV, OperatorType.ASSIGN_DIV);
             case '%' -> singleOrAssign(OperatorType.MOD, OperatorType.ASSIGN_MOD);
-            case '=' -> new Operator(OperatorType.ASSIGN, buildSpan(1));
+            case '=' -> doubleOrSingle(OperatorType.ASSIGN, OperatorType.EQUAL);
+            case '<' -> handleLessThan();
+            case '>' -> handleGreaterThan();
+            case '!' -> doubleOrSingle(OperatorType.LOGICAL_NOT, OperatorType.NOT_EQUAL);
+            case '&' -> doubleOrSingle(OperatorType.BIT_AND, OperatorType.LOGICAL_AND);
+            case '|' -> doubleOrSingle(OperatorType.BIT_OR, OperatorType.LOGICAL_OR);
+            case '^' -> singleOrAssign(OperatorType.BIT_XOR, OperatorType.ASSIGN_BIT_XOR);
+            case '~' -> new Operator(OperatorType.BIT_NOT, buildSpan(1));
+            case '?' -> new Operator(OperatorType.QUESTION, buildSpan(1));
+            case ':' -> new Operator(OperatorType.COLON, buildSpan(1));
             default -> {
                 if (isIdentifierChar(peek())) {
                     if (isNumeric(peek())) {
@@ -133,7 +142,16 @@ public class Lexer {
             off++;
         }
         String id = this.source.substring(this.pos, this.pos + off);
-        // This is a naive solution. Using a better data structure (hashmap, trie) likely performs better.
+        
+        // Check for boolean literals first
+        if (id.equals("true")) {
+            return new BooleanLiteral(true, buildSpan(off));
+        }
+        if (id.equals("false")) {
+            return new BooleanLiteral(false, buildSpan(off));
+        }
+        
+        // Then check for keywords
         for (KeywordType value : KeywordType.values()) {
             if (value.keyword().equals(id)) {
                 return new Keyword(value, buildSpan(off));
@@ -189,6 +207,43 @@ public class Lexer {
             return new Operator(assign, buildSpan(2));
         }
         return new Operator(single, buildSpan(1));
+    }
+
+    private Token doubleOrSingle(OperatorType single, OperatorType doubleOp) {
+        if (hasMore(1) && peek(1) == '=') {
+            return new Operator(doubleOp, buildSpan(2));
+        }
+        return new Operator(single, buildSpan(1));
+    }
+
+    private Token handleLessThan() {
+        if (hasMore(1)) {
+            if (peek(1) == '<') {
+                if (hasMore(2) && peek(2) == '=') {
+                    return new Operator(OperatorType.ASSIGN_SHIFT_LEFT, buildSpan(3));
+                }
+                return new Operator(OperatorType.SHIFT_LEFT, buildSpan(2));
+            }
+            if (peek(1) == '=') {
+                return new Operator(OperatorType.LESS_EQUAL, buildSpan(2));
+            }
+        }
+        return new Operator(OperatorType.LESS, buildSpan(1));
+    }
+
+    private Token handleGreaterThan() {
+        if (hasMore(1)) {
+            if (peek(1) == '>') {
+                if (hasMore(2) && peek(2) == '=') {
+                    return new Operator(OperatorType.ASSIGN_SHIFT_RIGHT, buildSpan(3));
+                }
+                return new Operator(OperatorType.SHIFT_RIGHT, buildSpan(2));
+            }
+            if (peek(1) == '=') {
+                return new Operator(OperatorType.GREATER_EQUAL, buildSpan(2));
+            }
+        }
+        return new Operator(OperatorType.GREATER, buildSpan(1));
     }
 
     private Span buildSpan(int proceed) {

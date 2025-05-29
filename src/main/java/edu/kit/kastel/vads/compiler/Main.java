@@ -10,8 +10,8 @@ import edu.kit.kastel.vads.compiler.parser.Parser;
 import edu.kit.kastel.vads.compiler.parser.TokenSource;
 import edu.kit.kastel.vads.compiler.parser.ast.FunctionTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ProgramTree;
-import edu.kit.kastel.vads.compiler.semantic.SemanticAnalysis;
-import edu.kit.kastel.vads.compiler.semantic.SemanticException;
+import edu.kit.kastel.vads.compiler.typechecker.TypeChecker;
+import edu.kit.kastel.vads.compiler.typechecker.TypeCheckException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,23 +27,32 @@ public class Main {
         }
         Path input = Path.of(args[0]);
         Path output = Path.of(args[1]);
+        
+        // Lex and parse
         ProgramTree program = lexAndParse(input);
+        
+        // Type check
         try {
-            new SemanticAnalysis(program).analyze();
-        } catch (SemanticException e) {
+            new TypeChecker().visit(program, null);
+        } catch (TypeCheckException e) {
             e.printStackTrace();
             System.exit(7);
             return;
         }
+
+        // Convert to IR and optimize
         List<IrGraph> graphs = new ArrayList<>();
         for (FunctionTree function : program.topLevelTrees()) {
             SsaTranslation translation = new SsaTranslation(function, new LocalValueNumbering());
             graphs.add(translation.translate());
         }
 
-        String s = new CodeGenerator().generateCode(graphs);
+        // Generate code from IR
+        String assembly = new CodeGenerator().generateCode(graphs);
+        
+        // Write assembly to file
         Path asmFile = output.resolveSibling(output.getFileName() + ".s");
-        Files.writeString(asmFile, s);
+        Files.writeString(asmFile, assembly);
 
         // Compile with GCC
         ProcessBuilder pb = new ProcessBuilder("gcc", "-o", output.toString(), asmFile.toString());

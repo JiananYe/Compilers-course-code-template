@@ -2,7 +2,7 @@ package edu.kit.kastel.vads.compiler.lexer;
 
 import edu.kit.kastel.vads.compiler.Span;
 
-public sealed interface Token permits ErrorToken, Identifier, Keyword, NumberLiteral, Operator, Separator {
+public sealed interface Token permits ErrorToken, Identifier, Keyword, NumberLiteral, BooleanLiteral, Operator, Separator {
 
     Span span();
 
