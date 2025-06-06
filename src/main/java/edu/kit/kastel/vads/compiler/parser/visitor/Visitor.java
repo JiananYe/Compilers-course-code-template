@@ -16,6 +16,7 @@ public interface Visitor<T, R> {
     R visit(ContinueTree tree, T data);
     R visit(BinaryOperationTree tree, T data);
     R visit(NegateTree tree, T data);
+    R visit(UnaryOperationTree tree, T data);
     R visit(IdentExpressionTree tree, T data);
     R visit(LiteralTree tree, T data);
     R visit(BooleanLiteralTree tree, T data);

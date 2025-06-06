@@ -22,6 +22,14 @@ import edu.kit.kastel.vads.compiler.parser.ast.ReturnTree;
 import edu.kit.kastel.vads.compiler.parser.ast.StatementTree;
 import edu.kit.kastel.vads.compiler.parser.ast.Tree;
 import edu.kit.kastel.vads.compiler.parser.ast.TypeTree;
+import edu.kit.kastel.vads.compiler.parser.ast.UnaryOperationTree;
+import edu.kit.kastel.vads.compiler.parser.ast.IfTree;
+import edu.kit.kastel.vads.compiler.parser.ast.WhileTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ForTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
+import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.symbol.Name;
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor;
 
@@ -196,6 +204,12 @@ public class SsaTranslation {
         }
 
         @Override
+        public Optional<Node> visit(UnaryOperationTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for UnaryOperationTree
+            throw new UnsupportedOperationException("UnaryOperationTree SSA translation not yet implemented.");
+        }
+
+        @Override
         public Optional<Node> visit(ProgramTree programTree, SsaTranslation data) {
             throw new UnsupportedOperationException();
         }
@@ -213,6 +227,48 @@ public class SsaTranslation {
         @Override
         public Optional<Node> visit(TypeTree typeTree, SsaTranslation data) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Optional<Node> visit(IfTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for IfTree
+            throw new UnsupportedOperationException("IfTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(WhileTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for WhileTree
+            throw new UnsupportedOperationException("WhileTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(ForTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for ForTree
+            throw new UnsupportedOperationException("ForTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(BreakTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for BreakTree
+            throw new UnsupportedOperationException("BreakTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(ContinueTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for ContinueTree
+            throw new UnsupportedOperationException("ContinueTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(TernaryTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for TernaryTree
+            throw new UnsupportedOperationException("TernaryTree SSA translation not yet implemented.");
+        }
+
+        @Override
+        public Optional<Node> visit(BooleanLiteralTree tree, SsaTranslation data) {
+            // TODO: Implement SSA translation for BooleanLiteralTree
+            throw new UnsupportedOperationException("BooleanLiteralTree SSA translation not yet implemented.");
         }
 
         private Node projResultDivMod(SsaTranslation data, Node divMod) {

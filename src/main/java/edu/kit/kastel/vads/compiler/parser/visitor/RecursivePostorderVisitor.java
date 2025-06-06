@@ -14,6 +14,14 @@ import edu.kit.kastel.vads.compiler.parser.ast.ProgramTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ReturnTree;
 import edu.kit.kastel.vads.compiler.parser.ast.StatementTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TypeTree;
+import edu.kit.kastel.vads.compiler.parser.ast.UnaryOperationTree;
+import edu.kit.kastel.vads.compiler.parser.ast.IfTree;
+import edu.kit.kastel.vads.compiler.parser.ast.WhileTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ForTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
+import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 
 /// A visitor that traverses a tree in postorder
 /// @param <T> a type for additional data
@@ -126,6 +134,66 @@ public class RecursivePostorderVisitor<T, R> implements Visitor<T, R> {
     @Override
     public R visit(TypeTree typeTree, T data) {
         return this.visitor.visit(typeTree, data);
+    }
+
+    @Override
+    public R visit(UnaryOperationTree tree, T data) {
+        R r = tree.operand().accept(this, data);
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
+    }
+
+    @Override
+    public R visit(IfTree tree, T data) {
+        R r = tree.condition().accept(this, data);
+        r = tree.thenBranch().accept(this, accumulate(data, r));
+        if (tree.elseBranch() != null) {
+            r = tree.elseBranch().accept(this, accumulate(data, r));
+        }
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
+    }
+
+    @Override
+    public R visit(WhileTree tree, T data) {
+        R r = tree.condition().accept(this, data);
+        r = tree.body().accept(this, accumulate(data, r));
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
+    }
+
+    @Override
+    public R visit(ForTree tree, T data) {
+        R r = tree.initializer().accept(this, data);
+        r = tree.condition().accept(this, accumulate(data, r));
+        r = tree.step().accept(this, accumulate(data, r));
+        r = tree.body().accept(this, accumulate(data, r));
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
+    }
+
+    @Override
+    public R visit(BreakTree tree, T data) {
+        return this.visitor.visit(tree, data);
+    }
+
+    @Override
+    public R visit(ContinueTree tree, T data) {
+        return this.visitor.visit(tree, data);
+    }
+
+    @Override
+    public R visit(TernaryTree tree, T data) {
+        R r = tree.condition().accept(this, data);
+        r = tree.thenExpr().accept(this, accumulate(data, r));
+        r = tree.elseExpr().accept(this, accumulate(data, r));
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
+    }
+
+    @Override
+    public R visit(BooleanLiteralTree tree, T data) {
+        return this.visitor.visit(tree, data);
     }
 
     protected T accumulate(T data, R value) {

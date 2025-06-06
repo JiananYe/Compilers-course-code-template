@@ -28,9 +28,9 @@ public class CodeGenerator {
 
     public String generateCode(List<IrGraph> program) {
         StringBuilder builder = new StringBuilder();
-        builder.append(".global main\n");
-        builder.append(".global _main\n");
-        builder.append(".text\n");
+        builder.append("    .section .text\n");
+        builder.append("    .global main\n");
+        builder.append("    .global _main\n");
         builder.append("main:\n");
         builder.append("    call _main\n");
         builder.append("    movq %rax, %rdi\n");

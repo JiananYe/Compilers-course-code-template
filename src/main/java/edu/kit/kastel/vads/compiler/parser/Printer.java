@@ -110,6 +110,7 @@ public class Printer {
             }
             case LValueIdentTree(var name) -> printTree(name);
             case IdentExpressionTree(var name) -> printTree(name);
+            default -> throw new RuntimeException("Unknown tree type: " + tree.getClass().getName());
         }
     }
 

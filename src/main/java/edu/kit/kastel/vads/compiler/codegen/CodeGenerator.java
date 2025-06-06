@@ -65,7 +65,7 @@ public class CodeGenerator implements Visitor<Void, String> {
 
     @Override
     public String visit(ProgramTree tree, Void data) {
-        tree.functions().forEach(f -> f.accept(this, data));
+        tree.topLevelTrees().forEach(f -> f.accept(this, data));
         return null;
     }
 
@@ -85,7 +85,7 @@ public class CodeGenerator implements Visitor<Void, String> {
 
     @Override
     public String visit(DeclarationTree tree, Void data) {
-        String name = tree.name().name().identifier();
+        String name = tree.name().name().asString();
         variables.put(name, stackOffset);
         stackOffset += 8;  // Allocate space for the variable
         
@@ -99,7 +99,7 @@ public class CodeGenerator implements Visitor<Void, String> {
     @Override
     public String visit(AssignmentTree tree, Void data) {
         tree.expression().accept(this, data);
-        String name = ((LValueIdentTree) tree.lvalue()).name().name().identifier();
+        String name = ((LValueIdentTree) tree.lValue()).name().name().asString();
         code.append("    movq %rax, -").append(variables.get(name)).append("(%rbp)\n");
         return null;
     }
@@ -198,70 +198,76 @@ public class CodeGenerator implements Visitor<Void, String> {
     }
 
     @Override
+    public String visit(NegateTree tree, Void data) {
+        // TODO: Implement code generation for NegateTree
+        throw new UnsupportedOperationException("NegateTree code generation not yet implemented.");
+    }
+
+    @Override
     public String visit(BinaryOperationTree tree, Void data) {
-        tree.right().accept(this, data);
+        tree.rhs().accept(this, data);
         push("%rax");
-        tree.left().accept(this, data);
+        tree.lhs().accept(this, data);
         pop("%rcx");
         
-        switch (tree.operator()) {
-            case PLUS -> code.append("    addq %rcx, %rax\n");
-            case MINUS -> {
+        switch (tree.operatorType()) {
+            case OperatorType.PLUS -> code.append("    addq %rcx, %rax\n");
+            case OperatorType.MINUS -> {
                 code.append("    subq %rcx, %rax\n");
                 code.append("    negq %rax\n");
             }
-            case MUL -> code.append("    imulq %rcx, %rax\n");
-            case DIV -> {
+            case OperatorType.MUL -> code.append("    imulq %rcx, %rax\n");
+            case OperatorType.DIV -> {
                 code.append("    cqto\n");
                 code.append("    idivq %rcx\n");
             }
-            case MOD -> {
+            case OperatorType.MOD -> {
                 code.append("    cqto\n");
                 code.append("    idivq %rcx\n");
                 code.append("    movq %rdx, %rax\n");
             }
-            case BIT_AND -> code.append("    andq %rcx, %rax\n");
-            case BIT_OR -> code.append("    orq %rcx, %rax\n");
-            case BIT_XOR -> code.append("    xorq %rcx, %rax\n");
-            case SHIFT_LEFT -> {
+            case OperatorType.BIT_AND -> code.append("    andq %rcx, %rax\n");
+            case OperatorType.BIT_OR -> code.append("    orq %rcx, %rax\n");
+            case OperatorType.BIT_XOR -> code.append("    xorq %rcx, %rax\n");
+            case OperatorType.SHIFT_LEFT -> {
                 code.append("    movb %cl, %cl\n");
                 code.append("    shlq %cl, %rax\n");
             }
-            case SHIFT_RIGHT -> {
+            case OperatorType.SHIFT_RIGHT -> {
                 code.append("    movb %cl, %cl\n");
                 code.append("    sarq %cl, %rax\n");
             }
-            case EQUAL -> {
+            case OperatorType.EQUAL -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    sete %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case NOT_EQUAL -> {
+            case OperatorType.NOT_EQUAL -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    setne %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case LESS -> {
+            case OperatorType.LESS -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    setl %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case LESS_EQUAL -> {
+            case OperatorType.LESS_EQUAL -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    setle %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case GREATER -> {
+            case OperatorType.GREATER -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    setg %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case GREATER_EQUAL -> {
+            case OperatorType.GREATER_EQUAL -> {
                 code.append("    cmpq %rcx, %rax\n");
                 code.append("    setge %al\n");
                 code.append("    movzbq %al, %rax\n");
             }
-            case LOGICAL_AND -> {
+            case OperatorType.LOGICAL_AND -> {
                 String falseLabel = newLabel("and_false");
                 String endLabel = newLabel("and_end");
                 code.append("    testq %rax, %rax\n");
@@ -274,7 +280,7 @@ public class CodeGenerator implements Visitor<Void, String> {
                 code.append("    xorq %rax, %rax\n");
                 code.append(endLabel).append(":\n");
             }
-            case LOGICAL_OR -> {
+            case OperatorType.LOGICAL_OR -> {
                 String trueLabel = newLabel("or_true");
                 String endLabel = newLabel("or_end");
                 code.append("    testq %rax, %rax\n");
@@ -295,9 +301,9 @@ public class CodeGenerator implements Visitor<Void, String> {
     public String visit(UnaryOperationTree tree, Void data) {
         tree.operand().accept(this, data);
         switch (tree.operator()) {
-            case MINUS -> code.append("    negq %rax\n");
-            case BIT_NOT -> code.append("    notq %rax\n");
-            case LOGICAL_NOT -> {
+            case OperatorType.MINUS -> code.append("    negq %rax\n");
+            case OperatorType.BIT_NOT -> code.append("    notq %rax\n");
+            case OperatorType.LOGICAL_NOT -> {
                 code.append("    testq %rax, %rax\n");
                 code.append("    setz %al\n");
                 code.append("    movzbq %al, %rax\n");
@@ -333,7 +339,7 @@ public class CodeGenerator implements Visitor<Void, String> {
 
     @Override
     public String visit(IdentExpressionTree tree, Void data) {
-        String name = tree.name().name().identifier();
+        String name = tree.name().name().asString();
         code.append("    movq -").append(variables.get(name)).append("(%rbp), %rax\n");
         return null;
     }

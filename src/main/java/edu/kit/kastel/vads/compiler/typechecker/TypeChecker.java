@@ -21,7 +21,7 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(ProgramTree tree, Void data) {
-        tree.functions().forEach(f -> f.accept(this, data));
+        tree.topLevelTrees().forEach(f -> f.accept(this, data));
         if (!hasReturn) {
             throw new TypeCheckException("Program must have a return statement");
         }
@@ -51,7 +51,7 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(DeclarationTree tree, Void data) {
-        String name = tree.name().name().identifier();
+        String name = tree.name().name().asString();
         if (variables.containsKey(name)) {
             throw new TypeCheckException("Variable " + name + " already declared");
         }
@@ -67,7 +67,7 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(AssignmentTree tree, Void data) {
-        Type lvalueType = tree.lvalue().accept(this, data);
+        Type lvalueType = tree.lValue().accept(this, data);
         Type exprType = tree.expression().accept(this, data);
         if (!lvalueType.equals(exprType)) {
             throw new TypeCheckException("Type mismatch in assignment");
@@ -145,42 +145,51 @@ public class TypeChecker implements Visitor<Void, Type> {
     }
 
     @Override
-    public Type visit(BinaryOperationTree tree, Void data) {
-        Type leftType = tree.left().accept(this, data);
-        Type rightType = tree.right().accept(this, data);
+    public Type visit(NegateTree tree, Void data) {
+        Type exprType = tree.expression().accept(this, data);
+        if (!exprType.equals(BasicType.INT)) {
+            throw new TypeCheckException("Negation operator requires integer operand");
+        }
+        return BasicType.INT;
+    }
 
-        return switch (tree.operator()) {
-            case LOGICAL_OR, LOGICAL_AND -> {
+    @Override
+    public Type visit(BinaryOperationTree tree, Void data) {
+        Type leftType = tree.lhs().accept(this, data);
+        Type rightType = tree.rhs().accept(this, data);
+
+        return switch (tree.operatorType()) {
+            case OperatorType.LOGICAL_OR, OperatorType.LOGICAL_AND -> {
                 if (!leftType.equals(BasicType.BOOL) || !rightType.equals(BasicType.BOOL)) {
                     throw new TypeCheckException("Logical operators require boolean operands");
                 }
                 yield BasicType.BOOL;
             }
-            case BIT_OR, BIT_XOR, BIT_AND, SHIFT_LEFT, SHIFT_RIGHT -> {
+            case OperatorType.BIT_OR, OperatorType.BIT_XOR, OperatorType.BIT_AND, OperatorType.SHIFT_LEFT, OperatorType.SHIFT_RIGHT -> {
                 if (!leftType.equals(BasicType.INT) || !rightType.equals(BasicType.INT)) {
                     throw new TypeCheckException("Bitwise operators require integer operands");
                 }
                 yield BasicType.INT;
             }
-            case EQUAL, NOT_EQUAL -> {
+            case OperatorType.EQUAL, OperatorType.NOT_EQUAL -> {
                 if (!leftType.equals(rightType)) {
                     throw new TypeCheckException("Equality operators require operands of the same type");
                 }
                 yield BasicType.BOOL;
             }
-            case LESS, LESS_EQUAL, GREATER, GREATER_EQUAL -> {
+            case OperatorType.LESS, OperatorType.LESS_EQUAL, OperatorType.GREATER, OperatorType.GREATER_EQUAL -> {
                 if (!leftType.equals(BasicType.INT) || !rightType.equals(BasicType.INT)) {
                     throw new TypeCheckException("Comparison operators require integer operands");
                 }
                 yield BasicType.BOOL;
             }
-            case PLUS, MINUS, MUL, DIV, MOD -> {
+            case OperatorType.PLUS, OperatorType.MINUS, OperatorType.MUL, OperatorType.DIV, OperatorType.MOD -> {
                 if (!leftType.equals(BasicType.INT) || !rightType.equals(BasicType.INT)) {
                     throw new TypeCheckException("Arithmetic operators require integer operands");
                 }
                 yield BasicType.INT;
             }
-            default -> throw new TypeCheckException("Unknown operator: " + tree.operator());
+            default -> throw new TypeCheckException("Unknown operator: " + tree.operatorType());
         };
     }
 
@@ -188,13 +197,13 @@ public class TypeChecker implements Visitor<Void, Type> {
     public Type visit(UnaryOperationTree tree, Void data) {
         Type operandType = tree.operand().accept(this, data);
         return switch (tree.operator()) {
-            case LOGICAL_NOT -> {
+            case OperatorType.LOGICAL_NOT -> {
                 if (!operandType.equals(BasicType.BOOL)) {
                     throw new TypeCheckException("Logical not requires boolean operand");
                 }
                 yield BasicType.BOOL;
             }
-            case BIT_NOT, MINUS -> {
+            case OperatorType.BIT_NOT, OperatorType.MINUS -> {
                 if (!operandType.equals(BasicType.INT)) {
                     throw new TypeCheckException("Bitwise not and unary minus require integer operand");
                 }
@@ -225,7 +234,7 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(IdentExpressionTree tree, Void data) {
-        String name = tree.name().name().identifier();
+        String name = tree.name().name().asString();
         Type type = variables.get(name);
         if (type == null) {
             throw new TypeCheckException("Undefined variable: " + name);
@@ -240,7 +249,7 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(LValueIdentTree tree, Void data) {
-        String name = tree.name().name().identifier();
+        String name = tree.name().name().asString();
         Type type = variables.get(name);
         if (type == null) {
             throw new TypeCheckException("Undefined variable: " + name);

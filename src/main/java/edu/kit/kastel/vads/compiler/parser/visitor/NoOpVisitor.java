@@ -13,6 +13,14 @@ import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ProgramTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ReturnTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TypeTree;
+import edu.kit.kastel.vads.compiler.parser.ast.UnaryOperationTree;
+import edu.kit.kastel.vads.compiler.parser.ast.IfTree;
+import edu.kit.kastel.vads.compiler.parser.ast.WhileTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ForTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
+import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 
 /// A visitor that does nothing and returns [Unit#INSTANCE] by default.
 /// This can be used to implement operations only for specific tree types.
@@ -80,6 +88,46 @@ public interface NoOpVisitor<T> extends Visitor<T, Unit> {
 
     @Override
     default Unit visit(TypeTree typeTree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(UnaryOperationTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(IfTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(WhileTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(ForTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(BreakTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(ContinueTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(TernaryTree tree, T data) {
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    default Unit visit(BooleanLiteralTree tree, T data) {
         return Unit.INSTANCE;
     }
 }

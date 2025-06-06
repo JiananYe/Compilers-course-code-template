@@ -7,6 +7,15 @@ import edu.kit.kastel.vads.compiler.parser.ast.LValueIdentTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NameTree;
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor;
 import edu.kit.kastel.vads.compiler.parser.visitor.Unit;
+import edu.kit.kastel.vads.compiler.parser.ast.UnaryOperationTree;
+import edu.kit.kastel.vads.compiler.parser.ast.IfTree;
+import edu.kit.kastel.vads.compiler.parser.ast.WhileTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ForTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
+import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
+import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
 
 import java.util.Locale;
 
@@ -74,6 +83,51 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         VariableStatus status = data.get(identExpressionTree.name());
         checkInitialized(identExpressionTree.name(), status);
         return NoOpVisitor.super.visit(identExpressionTree, data);
+    }
+
+    @Override
+    public Unit visit(UnaryOperationTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(IfTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(WhileTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(ForTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(BreakTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(ContinueTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(TernaryTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(BooleanLiteralTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(NegateTree tree, Namespace<VariableStatus> data) {
+        return NoOpVisitor.super.visit(tree, data);
     }
 
     enum VariableStatus {
