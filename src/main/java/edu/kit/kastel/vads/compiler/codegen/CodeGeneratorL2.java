@@ -1,5 +1,6 @@
-package edu.kit.kastel.vads.compiler.backend.aasm;
+package edu.kit.kastel.vads.compiler.codegen;
 
+import edu.kit.kastel.vads.compiler.backend.aasm.GraphColoringRegisterAllocator;
 import edu.kit.kastel.vads.compiler.backend.regalloc.Register;
 import edu.kit.kastel.vads.compiler.backend.regalloc.RegisterAllocator;
 import edu.kit.kastel.vads.compiler.ir.IrGraph;
@@ -24,7 +25,7 @@ import java.util.Set;
 
 import static edu.kit.kastel.vads.compiler.ir.util.NodeSupport.predecessorSkipProj;
 
-public class CodeGenerator {
+public class CodeGeneratorL2 {
 
     public String generateCode(List<IrGraph> program) {
         StringBuilder builder = new StringBuilder();

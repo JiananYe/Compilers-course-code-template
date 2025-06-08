@@ -32,6 +32,10 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
             case LValueIdentTree(var name) -> {
                 VariableStatus status = data.get(name);
                 checkDeclared(name, status);
+                // Check for uninitialized use in compound assignments
+                if (assignmentTree.operator().type() != edu.kit.kastel.vads.compiler.lexer.Operator.OperatorType.ASSIGN) {
+                    checkInitialized(name, status);
+                }
                 if (status != VariableStatus.INITIALIZED) {
                     // only update when needed, reassignment is totally fine
                     updateStatus(data, VariableStatus.INITIALIZED, name);

@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Stack;
 
-public class CodeGenerator implements Visitor<Void, String> {
+public class CodeGeneratorL1 implements Visitor<Void, String> {
     private final StringBuilder code = new StringBuilder();
     private final Map<String, Integer> variables = new HashMap<>();
     private final Stack<Integer> stack = new Stack<>();
@@ -17,17 +17,11 @@ public class CodeGenerator implements Visitor<Void, String> {
     private final Stack<String> loopStartLabels = new Stack<>();
     private final Stack<String> loopEndLabels = new Stack<>();
 
-    public CodeGenerator() {
+    public CodeGeneratorL1() {
         // Initialize the stack frame
         code.append("    .section .text\n");
         code.append("    .global main\n");
-        code.append("    .global _main\n");
         code.append("main:\n");
-        code.append("    call _main\n");
-        code.append("    movq %rax, %rdi\n");
-        code.append("    movq $0x3C, %rax\n");
-        code.append("    syscall\n");
-        code.append("_main:\n");
         code.append("    pushq %rbp\n");
         code.append("    movq %rsp, %rbp\n");
         code.append("    subq $1024, %rsp\n");
@@ -98,9 +92,62 @@ public class CodeGenerator implements Visitor<Void, String> {
 
     @Override
     public String visit(AssignmentTree tree, Void data) {
-        tree.expression().accept(this, data);
         String name = ((LValueIdentTree) tree.lValue()).name().name().asString();
-        code.append("    movq %rax, -").append(variables.get(name)).append("(%rbp)\n");
+        Integer offset = variables.get(name);
+
+        if (tree.operator().type() == OperatorType.ASSIGN) {
+            tree.expression().accept(this, data);
+        } else {
+            // Compound assignment
+            tree.expression().accept(this, data); // RHS result in %rax
+            push("%rax");                         // Save RHS
+            code.append("    movq -").append(offset).append("(%rbp), %rax\n"); // Load LHS into %rax
+            pop("%rcx");                          // Pop RHS into %rcx
+            
+            // Now %rax has LHS value, %rcx has RHS value
+            switch (tree.operator().type()) {
+                case ASSIGN_PLUS:
+                    code.append("    addq %rcx, %rax\n");
+                    break;
+                case ASSIGN_MINUS:
+                    code.append("    subq %rcx, %rax\n");
+                    break;
+                case ASSIGN_MUL:
+                    code.append("    imulq %rcx, %rax\n");
+                    break;
+                case ASSIGN_DIV:
+                    code.append("    cqto\n");
+                    code.append("    idivq %rcx\n");
+                    break;
+                case ASSIGN_MOD:
+                    code.append("    cqto\n");
+                    code.append("    idivq %rcx\n");
+                    code.append("    movq %rdx, %rax\n");
+                    break;
+                case ASSIGN_BIT_AND:
+                    code.append("    andq %rcx, %rax\n");
+                    break;
+                case ASSIGN_BIT_OR:
+                    code.append("    orq %rcx, %rax\n");
+                    break;
+                case ASSIGN_BIT_XOR:
+                    code.append("    xorq %rcx, %rax\n");
+                    break;
+                case ASSIGN_SHIFT_LEFT:
+                    code.append("    movb %cl, %cl\n");
+                    code.append("    shlq %cl, %rax\n");
+                    break;
+                case ASSIGN_SHIFT_RIGHT:
+                    code.append("    movb %cl, %cl\n");
+                    code.append("    sarq %cl, %rax\n");
+                    break;
+                default:
+                    // This case should ideally not be reached if the parser only allows valid assignment operators.
+                    throw new UnsupportedOperationException("Unsupported assignment operator: " + tree.operator().type());
+            }
+        }
+        // Store result back
+        code.append("    movq %rax, -").append(offset).append("(%rbp)\n");
         return null;
     }
 

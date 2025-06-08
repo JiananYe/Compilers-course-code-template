@@ -1,6 +1,6 @@
 package edu.kit.kastel.vads.compiler;
 
-import edu.kit.kastel.vads.compiler.backend.aasm.CodeGenerator;
+import edu.kit.kastel.vads.compiler.codegen.CodeGeneratorL2;
 import edu.kit.kastel.vads.compiler.ir.IrGraph;
 import edu.kit.kastel.vads.compiler.ir.SsaTranslation;
 import edu.kit.kastel.vads.compiler.ir.optimize.LocalValueNumbering;
@@ -48,7 +48,7 @@ public class Main {
         }
 
         // Generate code from IR
-        String assembly = new CodeGenerator().generateCode(graphs);
+        String assembly = new CodeGeneratorL2().generateCode(graphs);
         
         // Write assembly to file
         Path asmFile = output.resolveSibling(output.getFileName() + ".s");
