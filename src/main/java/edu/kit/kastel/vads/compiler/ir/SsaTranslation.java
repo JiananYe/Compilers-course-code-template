@@ -32,6 +32,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.symbol.Name;
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor;
+import edu.kit.kastel.vads.compiler.ir.node.Phi;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -80,6 +81,8 @@ public class SsaTranslation {
         private static final Optional<Node> NOT_AN_EXPRESSION = Optional.empty();
 
         private final Deque<DebugInfo> debugStack = new ArrayDeque<>();
+        private final Deque<Block> breakTargets = new ArrayDeque<>();
+        private final Deque<Block> continueTargets = new ArrayDeque<>();
 
         private void pushSpan(Tree tree) {
             this.debugStack.push(DebugInfoHelper.getDebugInfo());
@@ -247,32 +250,29 @@ public class SsaTranslation {
         public Optional<Node> visit(WhileTree tree, SsaTranslation data) {
             pushSpan(tree);
 
-            // 1. Create blocks for the loop header (condition), body, and exit
             Block condBlock = new Block(data.constructor.graph());
             Block bodyBlock = new Block(data.constructor.graph());
             Block exitBlock = new Block(data.constructor.graph());
 
-            // 2. Jump to the condition block
             condBlock.addPredecessor(data.constructor.currentBlock());
-
-            // 3. Evaluate the condition in the condBlock
             data.constructor.setCurrentBlock(condBlock);
-            Node condValue = tree.condition().accept(this, data).orElseThrow();
 
-            // 4. Branch on the condition: true -> body, false -> exit
-            // Use a conditional jump node (assume newCondJump returns a node representing the branch)
-            // If you have a specific node for this, use it; otherwise, just set up the blocks
-            // For now, just connect the blocks as predecessors
+            // Push loop targets
+            continueTargets.push(condBlock);
+            breakTargets.push(exitBlock);
+
+            Node condValue = tree.condition().accept(this, data).orElseThrow();
             bodyBlock.addPredecessor(condBlock);
             exitBlock.addPredecessor(condBlock);
-            // (In a real IR, you'd create a conditional jump node here)
 
-            // 5. Body block: execute the body, then jump back to condition
             data.constructor.setCurrentBlock(bodyBlock);
             tree.body().accept(this, data);
             condBlock.addPredecessor(bodyBlock);
 
-            // 6. Set the current block to the exit block for subsequent code
+            // Pop loop targets
+            continueTargets.pop();
+            breakTargets.pop();
+
             data.constructor.setCurrentBlock(exitBlock);
 
             popSpan();
@@ -340,26 +340,74 @@ public class SsaTranslation {
 
         @Override
         public Optional<Node> visit(BreakTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for BreakTree
-            throw new UnsupportedOperationException("BreakTree SSA translation not yet implemented.");
+            pushSpan(tree);
+            Block target = breakTargets.peek();
+            if (target == null) {
+                throw new IllegalStateException("break used outside of loop");
+            }
+            target.addPredecessor(data.constructor.currentBlock());
+            // End the current block (no further code should be generated here)
+            data.constructor.setCurrentBlock(new Block(data.constructor.graph()));
+            popSpan();
+            return NOT_AN_EXPRESSION;
         }
 
         @Override
         public Optional<Node> visit(ContinueTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for ContinueTree
-            throw new UnsupportedOperationException("ContinueTree SSA translation not yet implemented.");
+            pushSpan(tree);
+            Block target = continueTargets.peek();
+            if (target == null) {
+                throw new IllegalStateException("continue used outside of loop");
+            }
+            target.addPredecessor(data.constructor.currentBlock());
+            // End the current block (no further code should be generated here)
+            data.constructor.setCurrentBlock(new Block(data.constructor.graph()));
+            popSpan();
+            return NOT_AN_EXPRESSION;
         }
 
         @Override
         public Optional<Node> visit(TernaryTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for TernaryTree
-            throw new UnsupportedOperationException("TernaryTree SSA translation not yet implemented.");
+            pushSpan(tree);
+
+            // Evaluate the condition
+            Node condValue = tree.condition().accept(this, data).orElseThrow();
+
+            // Create blocks for then, else, and merge
+            Block thenBlock = new Block(data.constructor.graph());
+            Block elseBlock = new Block(data.constructor.graph());
+            Block mergeBlock = new Block(data.constructor.graph());
+
+            // Branch on the condition
+            thenBlock.addPredecessor(data.constructor.currentBlock());
+            elseBlock.addPredecessor(data.constructor.currentBlock());
+
+            // Then branch
+            data.constructor.setCurrentBlock(thenBlock);
+            Node thenValue = tree.thenExpr().accept(this, data).orElseThrow();
+            mergeBlock.addPredecessor(thenBlock);
+
+            // Else branch
+            data.constructor.setCurrentBlock(elseBlock);
+            Node elseValue = tree.elseExpr().accept(this, data).orElseThrow();
+            mergeBlock.addPredecessor(elseBlock);
+
+            // Merge
+            data.constructor.setCurrentBlock(mergeBlock);
+            Node phi = data.constructor.newPhi();
+            ((Phi) phi).appendOperand(thenValue);
+            ((Phi) phi).appendOperand(elseValue);
+
+            popSpan();
+            return Optional.of(phi);
         }
 
         @Override
         public Optional<Node> visit(BooleanLiteralTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for BooleanLiteralTree
-            throw new UnsupportedOperationException("BooleanLiteralTree SSA translation not yet implemented.");
+            pushSpan(tree);
+            Node node = data.constructor.newConstInt(tree.value() ? 1 : 0);
+            popSpan();
+            return Optional.of(node);
         }
 
         private Node projResultDivMod(SsaTranslation data, Node divMod) {
