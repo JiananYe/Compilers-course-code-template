@@ -84,8 +84,10 @@ public class Parser {
         StatementTree statement;
         if (this.tokenSource.peek().isKeyword(KeywordType.INT) || this.tokenSource.peek().isKeyword(KeywordType.BOOL)) {
             statement = parseDeclaration();
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
         } else if (this.tokenSource.peek().isKeyword(KeywordType.RETURN)) {
             statement = parseReturn();
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
         } else if (this.tokenSource.peek().isKeyword(KeywordType.IF)) {
             statement = parseIf();
         } else if (this.tokenSource.peek().isKeyword(KeywordType.WHILE)) {
@@ -94,12 +96,16 @@ public class Parser {
             statement = parseFor();
         } else if (this.tokenSource.peek().isKeyword(KeywordType.BREAK)) {
             statement = parseBreak();
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
         } else if (this.tokenSource.peek().isKeyword(KeywordType.CONTINUE)) {
             statement = parseContinue();
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
+        } else if (this.tokenSource.peek().isSeparator(SeparatorType.BRACE_OPEN)) {
+            statement = parseBlock();
         } else {
             statement = parseSimple();
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
         }
-        this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
         return statement;
     }
 
@@ -163,18 +169,35 @@ public class Parser {
         return new ForTree(initializer, condition, step, body, forKeyword.span());
     }
 
-    private StatementTree parseForInitializer() {
-        if (this.tokenSource.peek().isSeparator(SeparatorType.SEMICOLON)) {
+    private StatementTree parseForHeaderStatement() {
+        // If the next token is a separator, there is no statement here
+        if (this.tokenSource.peek() instanceof Separator) {
             return null;
         }
-        return parseStatement();
+        if (this.tokenSource.peek().isKeyword(KeywordType.INT) || this.tokenSource.peek().isKeyword(KeywordType.BOOL)) {
+            StatementTree decl = parseDeclaration();
+            return decl;
+        } else if (this.tokenSource.peek() instanceof Identifier) {
+            LValueTree lValue = parseLValue();
+            if (this.tokenSource.peek() instanceof Operator) {
+                Operator assignmentOperator = parseAssignmentOperator();
+                ExpressionTree expression = parseExpression();
+                return new AssignmentTree(lValue, assignmentOperator, expression);
+            }
+        }
+        return null;
+    }
+
+    private StatementTree parseForInitializer() {
+        StatementTree initializer = parseForHeaderStatement();
+        if (initializer != null && !(initializer instanceof DeclarationTree)) {
+            this.tokenSource.expectSeparator(SeparatorType.SEMICOLON);
+        }
+        return initializer;
     }
 
     private StatementTree parseForStep() {
-        if (this.tokenSource.peek().isSeparator(SeparatorType.PAREN_CLOSE)) {
-            return null;
-        }
-        return parseStatement();
+        return parseForHeaderStatement();
     }
 
     private StatementTree parseBreak() {

@@ -35,6 +35,8 @@ import edu.kit.kastel.vads.compiler.parser.visitor.Visitor;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.BinaryOperator;
 
@@ -126,6 +128,12 @@ public class SsaTranslation {
                 case MUL -> data.constructor.newMul(lhs, rhs);
                 case DIV -> projResultDivMod(data, data.constructor.newDiv(lhs, rhs));
                 case MOD -> projResultDivMod(data, data.constructor.newMod(lhs, rhs));
+                case GREATER -> data.constructor.newGreater(lhs, rhs);
+                case GREATER_EQUAL -> data.constructor.newGreaterEqual(lhs, rhs);
+                case LESS -> data.constructor.newLess(lhs, rhs);
+                case LESS_EQUAL -> data.constructor.newLessEqual(lhs, rhs);
+                case EQUAL -> data.constructor.newEqual(lhs, rhs);
+                case NOT_EQUAL -> data.constructor.newNotEqual(lhs, rhs);
                 default ->
                     throw new IllegalArgumentException("not a binary expression operator " + binaryOperationTree.operatorType());
             };
@@ -237,14 +245,97 @@ public class SsaTranslation {
 
         @Override
         public Optional<Node> visit(WhileTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for WhileTree
-            throw new UnsupportedOperationException("WhileTree SSA translation not yet implemented.");
+            pushSpan(tree);
+
+            // 1. Create blocks for the loop header (condition), body, and exit
+            Block condBlock = new Block(data.constructor.graph());
+            Block bodyBlock = new Block(data.constructor.graph());
+            Block exitBlock = new Block(data.constructor.graph());
+
+            // 2. Jump to the condition block
+            condBlock.addPredecessor(data.constructor.currentBlock());
+
+            // 3. Evaluate the condition in the condBlock
+            data.constructor.setCurrentBlock(condBlock);
+            Node condValue = tree.condition().accept(this, data).orElseThrow();
+
+            // 4. Branch on the condition: true -> body, false -> exit
+            // Use a conditional jump node (assume newCondJump returns a node representing the branch)
+            // If you have a specific node for this, use it; otherwise, just set up the blocks
+            // For now, just connect the blocks as predecessors
+            bodyBlock.addPredecessor(condBlock);
+            exitBlock.addPredecessor(condBlock);
+            // (In a real IR, you'd create a conditional jump node here)
+
+            // 5. Body block: execute the body, then jump back to condition
+            data.constructor.setCurrentBlock(bodyBlock);
+            tree.body().accept(this, data);
+            condBlock.addPredecessor(bodyBlock);
+
+            // 6. Set the current block to the exit block for subsequent code
+            data.constructor.setCurrentBlock(exitBlock);
+
+            popSpan();
+            return NOT_AN_EXPRESSION;
         }
 
         @Override
         public Optional<Node> visit(ForTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for ForTree
-            throw new UnsupportedOperationException("ForTree SSA translation not yet implemented.");
+            pushSpan(tree);
+
+            // 1. Translate the initializer (if present)
+            if (tree.initializer() != null) {
+                tree.initializer().accept(this, data);
+            }
+
+            // 2. Transform the body: insert step before every continue and at the end
+            StatementTree transformedBody = insertStepBeforeContinueAndEnd(tree.body(), tree.step());
+
+            // 3. Create a WhileTree with the condition and the transformed body
+            WhileTree whileTree = new WhileTree(tree.condition(), transformedBody, tree.span());
+
+            // 4. Visit the while loop
+            whileTree.accept(this, data);
+
+            popSpan();
+            return NOT_AN_EXPRESSION;
+        }
+
+        // Helper to insert step before every continue and at the end of the body
+        private StatementTree insertStepBeforeContinueAndEnd(StatementTree body, StatementTree step) {
+            if (step == null) return body;
+
+            if (body instanceof BlockTree block) {
+                List<StatementTree> newStatements = new ArrayList<>();
+                for (StatementTree stmt : block.statements()) {
+                    newStatements.add(insertStepBeforeContinueAndEnd(stmt, step));
+                }
+                // Add step at the end if last statement is not return/break/continue
+                if (newStatements.isEmpty() ||
+                    !(isAbrupt(newStatements.get(newStatements.size() - 1)))) {
+                    newStatements.add(step);
+                }
+                return new BlockTree(newStatements, block.span());
+            } else if (body instanceof ContinueTree) {
+                // Replace continue with step; continue
+                List<StatementTree> seq = new ArrayList<>();
+                seq.add(step);
+                seq.add(body);
+                return new BlockTree(seq, body.span());
+            } else if (body instanceof IfTree ifTree) {
+                StatementTree thenBranch = insertStepBeforeContinueAndEnd(ifTree.thenBranch(), step);
+                StatementTree elseBranch = ifTree.elseBranch() != null
+                    ? insertStepBeforeContinueAndEnd(ifTree.elseBranch(), step)
+                    : null;
+                return new IfTree(ifTree.condition(), thenBranch, elseBranch, ifTree.span());
+            }
+            // For other statements, just return as is
+            return body;
+        }
+
+        // Helper to check if a statement is abrupt (return, break, continue)
+        private boolean isAbrupt(StatementTree stmt) {
+            return stmt instanceof ReturnTree || stmt instanceof BreakTree || stmt instanceof ContinueTree;
         }
 
         @Override

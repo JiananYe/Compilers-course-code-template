@@ -14,6 +14,12 @@ import edu.kit.kastel.vads.compiler.ir.node.StartNode;
 import edu.kit.kastel.vads.compiler.ir.node.SubNode;
 import edu.kit.kastel.vads.compiler.ir.optimize.Optimizer;
 import edu.kit.kastel.vads.compiler.parser.symbol.Name;
+import edu.kit.kastel.vads.compiler.ir.node.GreaterNode;
+import edu.kit.kastel.vads.compiler.ir.node.GreaterEqualNode;
+import edu.kit.kastel.vads.compiler.ir.node.LessNode;
+import edu.kit.kastel.vads.compiler.ir.node.LessEqualNode;
+import edu.kit.kastel.vads.compiler.ir.node.EqualNode;
+import edu.kit.kastel.vads.compiler.ir.node.NotEqualNode;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -187,6 +193,30 @@ class GraphConstructor {
             phi.appendOperand(readSideEffect(pred.block()));
         }
         return tryRemoveTrivialPhi(phi);
+    }
+
+    // Setter for currentBlock to allow SSA translation to update the current block
+    void setCurrentBlock(Block block) {
+        this.currentBlock = block;
+    }
+
+    public Node newGreater(Node left, Node right) {
+        return new GreaterNode(currentBlock(), left, right);
+    }
+    public Node newGreaterEqual(Node left, Node right) {
+        return new GreaterEqualNode(currentBlock(), left, right);
+    }
+    public Node newLess(Node left, Node right) {
+        return new LessNode(currentBlock(), left, right);
+    }
+    public Node newLessEqual(Node left, Node right) {
+        return new LessEqualNode(currentBlock(), left, right);
+    }
+    public Node newEqual(Node left, Node right) {
+        return new EqualNode(currentBlock(), left, right);
+    }
+    public Node newNotEqual(Node left, Node right) {
+        return new NotEqualNode(currentBlock(), left, right);
     }
 
 }

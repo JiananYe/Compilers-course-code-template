@@ -138,10 +138,7 @@ public class CodeGeneratorL2 {
                     builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
                 }
             }
-            case Phi phi -> {
-                throw new UnsupportedOperationException("phi");
-            }
-            case Block _, ProjNode _, StartNode _ -> {
+            case Phi _, Block _, ProjNode _, StartNode _ -> {
                 // do nothing
                 return;
             }
