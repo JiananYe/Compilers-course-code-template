@@ -84,11 +84,20 @@ public class CodeGeneratorL2 {
             }
             case SubNode sub -> {
                 Register result = registers.get(sub);
-                Register left = registers.get(predecessorSkipProj(sub, BinaryOperationNode.LEFT));
-                Register right = registers.get(predecessorSkipProj(sub, BinaryOperationNode.RIGHT));
-                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
-                builder.append("    subl ").append(getRegisterName(right)).append(", %eax\n");
-                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                Node leftNode = predecessorSkipProj(sub, BinaryOperationNode.LEFT);
+                Node rightNode = predecessorSkipProj(sub, BinaryOperationNode.RIGHT);
+                Register left = registers.get(leftNode);
+                Register right = registers.get(rightNode);
+                // Check for negation pattern: 0 - x
+                if (leftNode instanceof ConstIntNode c && c.value() == 0) {
+                    builder.append("    movl ").append(getRegisterName(right)).append(", %eax\n");
+                    builder.append("    negl %eax\n");
+                    builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                } else {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                    builder.append("    subl ").append(getRegisterName(right)).append(", %eax\n");
+                    builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                }
             }
             case MulNode mul -> {
                 Register result = registers.get(mul);
