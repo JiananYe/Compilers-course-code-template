@@ -78,64 +78,54 @@ public class CodeGeneratorL2 {
                 Register result = registers.get(add);
                 Register left = registers.get(predecessorSkipProj(add, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(add, BinaryOperationNode.RIGHT));
-                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
-                builder.append("    addq ").append(getRegisterName(right)).append(", %rax\n");
-                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    addl ").append(getRegisterName(right)).append(", %eax\n");
+                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
             }
             case SubNode sub -> {
                 Register result = registers.get(sub);
                 Register left = registers.get(predecessorSkipProj(sub, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(sub, BinaryOperationNode.RIGHT));
-                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
-                builder.append("    subq ").append(getRegisterName(right)).append(", %rax\n");
-                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    subl ").append(getRegisterName(right)).append(", %eax\n");
+                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
             }
             case MulNode mul -> {
                 Register result = registers.get(mul);
                 Register left = registers.get(predecessorSkipProj(mul, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(mul, BinaryOperationNode.RIGHT));
-                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
-                builder.append("    imulq ").append(getRegisterName(right)).append(", %rax\n");
-                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    imull ").append(getRegisterName(right)).append(", %eax\n");
+                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
             }
             case DivNode div -> {
                 Register result = registers.get(div);
                 Register left = registers.get(predecessorSkipProj(div, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(div, BinaryOperationNode.RIGHT));
-                
-                // First move the dividend to %rax
-                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
-                // Then move the divisor to %rcx
-                builder.append("    movq ").append(getRegisterName(right)).append(", %rcx\n");
-                // Sign extend %rax into %rdx for signed division
-                builder.append("    cqto\n");
-                // Use idivq for signed division
-                builder.append("    idivq %rcx\n");
-                builder.append("    movq %rax, ").append(getRegisterName(result)).append("\n");
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    movl ").append(getRegisterName(right)).append(", %ecx\n");
+                builder.append("    cltd\n");
+                builder.append("    idivl %ecx\n");
+                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
             }
             case ModNode mod -> {
                 Register result = registers.get(mod);
                 Register left = registers.get(predecessorSkipProj(mod, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(mod, BinaryOperationNode.RIGHT));
-                
-                // First move the dividend to %rax
-                builder.append("    movq ").append(getRegisterName(left)).append(", %rax\n");
-                // Then move the divisor to %rcx
-                builder.append("    movq ").append(getRegisterName(right)).append(", %rcx\n");
-                // Sign extend %rax into %rdx for signed division
-                builder.append("    cqto\n");
-                // Use idivq for signed division
-                builder.append("    idivq %rcx\n");
-                builder.append("    movq %rdx, ").append(getRegisterName(result)).append("\n");
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    movl ").append(getRegisterName(right)).append(", %ecx\n");
+                builder.append("    cltd\n");
+                builder.append("    idivl %ecx\n");
+                builder.append("    movl %edx, ").append(getRegisterName(result)).append("\n");
             }
             case ConstIntNode c -> {
                 Register reg = registers.get(c);
-                builder.append("    movq $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
+                builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
             }
             case ReturnNode r -> {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
                 if (result != null) {
-                    builder.append("    movq ").append(getRegisterName(result)).append(", %rax\n");
+                    builder.append("    movl ").append(getRegisterName(result)).append(", %eax\n");
                 }
             }
             case Phi _, Block _, ProjNode _, StartNode _ -> {
@@ -147,21 +137,21 @@ public class CodeGeneratorL2 {
     }
 
     private String getRegisterName(Register reg) {
-        // Convert abstract register names to x86-64 register names
+        // Convert abstract register names to x86-64 32-bit register names
         String regName = reg.toString();
         if (regName.startsWith("%")) {
             int regNum = Integer.parseInt(regName.substring(1));
             if (regNum < 3) {
                 return switch (regNum) {
-                    case 0 -> "%rbx";
-                    case 1 -> "%rcx";
-                    case 2 -> "%rdx";
+                    case 0 -> "%ebx";
+                    case 1 -> "%ecx";
+                    case 2 -> "%edx";
                     default -> throw new IllegalArgumentException("Unsupported register: " + reg);
                 };
             } else {
                 // For registers beyond %2, use stack locations
-                // Each stack slot is 8 bytes (64 bits)
-                int stackOffset = (regNum - 3) * 8;
+                // Each stack slot is 4 bytes (32 bits)
+                int stackOffset = (regNum - 3) * 4;
                 return stackOffset + "(%rsp)";
             }
         }
