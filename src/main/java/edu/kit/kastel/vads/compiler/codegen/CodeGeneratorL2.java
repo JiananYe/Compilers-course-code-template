@@ -78,9 +78,12 @@ public class CodeGeneratorL2 {
                 Register result = registers.get(add);
                 Register left = registers.get(predecessorSkipProj(add, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(add, BinaryOperationNode.RIGHT));
-                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
-                builder.append("    addl ").append(getRegisterName(right)).append(", %eax\n");
-                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                if (result.equals(left)) {
+                    builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                } else {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                    builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                }
             }
             case SubNode sub -> {
                 Register result = registers.get(sub);
@@ -90,22 +93,29 @@ public class CodeGeneratorL2 {
                 Register right = registers.get(rightNode);
                 // Check for negation pattern: 0 - x
                 if (leftNode instanceof ConstIntNode c && c.value() == 0) {
-                    builder.append("    movl ").append(getRegisterName(right)).append(", %eax\n");
-                    builder.append("    negl %eax\n");
-                    builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                    // Always use a temp register for negation to avoid overwriting
+                    builder.append("    movl ").append(getRegisterName(right)).append(", %ecx\n");
+                    builder.append("    negl %ecx\n");
+                    builder.append("    movl %ecx, ").append(getRegisterName(result)).append("\n");
                 } else {
-                    builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
-                    builder.append("    subl ").append(getRegisterName(right)).append(", %eax\n");
-                    builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                    if (!result.equals(left)) {
+                        builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                    }
+                    builder.append("    subl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
                 }
             }
             case MulNode mul -> {
                 Register result = registers.get(mul);
                 Register left = registers.get(predecessorSkipProj(mul, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(mul, BinaryOperationNode.RIGHT));
-                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
-                builder.append("    imull ").append(getRegisterName(right)).append(", %eax\n");
-                builder.append("    movl %eax, ").append(getRegisterName(result)).append("\n");
+                if (result.equals(left)) {
+                    builder.append("    imull ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                } else if (result.equals(right)) {
+                    builder.append("    imull ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                } else {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                    builder.append("    imull ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                }
             }
             case DivNode div -> {
                 Register result = registers.get(div);
@@ -128,6 +138,21 @@ public class CodeGeneratorL2 {
                 builder.append("    movl %edx, ").append(getRegisterName(result)).append("\n");
             }
             case ConstIntNode c -> {
+                // Only emit movl for constants if not 0, or if not part of a negation pattern
+                boolean isNegationZero = false;
+                for (Node user : registers.keySet()) {
+                    if (user instanceof SubNode sub) {
+                        Node leftNode = predecessorSkipProj(sub, BinaryOperationNode.LEFT);
+                        if (leftNode == c && leftNode instanceof ConstIntNode cc && cc.value() == 0) {
+                            isNegationZero = true;
+                            break;
+                        }
+                    }
+                }
+                if (c.value() == 0 && isNegationZero) {
+                    // Do not emit movl $0, ... for negation
+                    break;
+                }
                 Register reg = registers.get(c);
                 builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
             }
