@@ -25,10 +25,14 @@ import edu.kit.kastel.vads.compiler.ir.node.EqualNode;
 import edu.kit.kastel.vads.compiler.ir.node.AndNode;
 import edu.kit.kastel.vads.compiler.ir.node.XorNode;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
 
 import static edu.kit.kastel.vads.compiler.ir.util.NodeSupport.predecessorSkipProj;
 
@@ -69,17 +73,110 @@ public class CodeGeneratorL2 {
     }
 
     private void generateForGraph(IrGraph graph, StringBuilder builder, Map<Node, Register> registers) {
-        Set<Node> allNodes = new HashSet<>();
-        collectAllNodes(graph.endBlock(), allNodes);
-        Set<Node> visited = new HashSet<>();
-        for (Node node : allNodes) {
-            if (node instanceof ReturnNode ret) {
-                Node result = ret.predecessor(ReturnNode.RESULT);
-                scan(result, visited, builder, registers);
+        // 1. Collect all blocks by traversing the graph
+        Set<Block> allBlocks = new HashSet<>();
+        Deque<Block> blockWorklist = new ArrayDeque<>();
+        blockWorklist.add(graph.startBlock());
+        while (!blockWorklist.isEmpty()) {
+            Block b = blockWorklist.pop();
+            if (allBlocks.add(b)) {
+                // For each successor of the block, if it's a block, add to worklist
+                for (Node node : b.predecessors()) {
+                    if (node instanceof Block predBlock) {
+                        blockWorklist.add(predBlock);
+                    }
+                }
+                // Also add successors
+                for (Node node : graph.successors(b)) {
+                    if (node instanceof Block succBlock) {
+                        blockWorklist.add(succBlock);
+                    }
+                }
             }
         }
-        // Scan the end block for epilogue code, with the same visited set
-        scan(graph.endBlock(), visited, builder, registers);
+        // 2. Assign labels to blocks
+        Map<Block, String> blockLabels = new HashMap<>();
+        int blockId = 0;
+        for (Block b : allBlocks) {
+            blockLabels.put(b, "block_" + blockId++);
+        }
+        // 3. For each block, collect its nodes
+        Map<Block, List<Node>> blockNodes = new HashMap<>();
+        for (Block b : allBlocks) {
+            blockNodes.put(b, new ArrayList<>());
+        }
+        // Traverse all nodes and assign to their block
+        Set<Node> allNodes = new HashSet<>();
+        collectAllNodes(graph.startBlock(), allNodes);
+        Set<Node> allNodesFromEnd = new HashSet<>();
+        collectAllNodes(graph.endBlock(), allNodesFromEnd);
+        allNodes.addAll(allNodesFromEnd);
+        for (Node n : allNodes) {
+            if (n instanceof Block b) continue;
+            Block blk = n.block();
+            blockNodes.computeIfAbsent(blk, k -> new ArrayList<>());
+            blockNodes.get(blk).add(n);
+        }
+        // 4. Emit code for blocks in a worklist respecting control flow
+        Set<Block> emitted = new HashSet<>();
+        Deque<Block> emitWorklist = new ArrayDeque<>();
+        emitWorklist.add(graph.startBlock());
+        Set<Node> globalVisited = new HashSet<>();
+        while (!emitWorklist.isEmpty()) {
+            Block block = emitWorklist.pop();
+            if (!emitted.add(block)) continue;
+            builder.append(blockLabels.get(block)).append(":\n");
+            // Emit code for all nodes in the block (except Phi)
+            List<Node> nodes = blockNodes.getOrDefault(block, List.of());
+            for (Node node : nodes) {
+                if (!(node instanceof Phi)) {
+                    // Only emit if node belongs to this block and hasn't been emitted globally
+                    if (node.block() == block && globalVisited.add(node)) {
+                        scan(node, globalVisited, builder, registers);
+                    }
+                }
+            }
+            // For each successor, emit phi moves for this block
+            for (Node succ : graph.successors(block)) {
+                if (succ instanceof Block succBlock) {
+                    for (Node node : blockNodes.getOrDefault(succBlock, List.of())) {
+                        if (node instanceof Phi phi) {
+                            int predIdx = succBlock.predecessors().indexOf(block);
+                            if (predIdx >= 0 && predIdx < phi.predecessors().size()) {
+                                Node incoming = phi.predecessors().get(predIdx);
+                                Register src = registers.get(incoming);
+                                Register dest = registers.get(phi);
+                                if (!dest.equals(src)) {
+                                    builder.append("    movl ").append(getRegisterName(src)).append(", ").append(getRegisterName(dest)).append("\n");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Emit control flow: if this block ends with a conditional, emit jump logic
+            List<Block> successors = new ArrayList<>();
+            for (Node succ : graph.successors(block)) {
+                if (succ instanceof Block sb) successors.add(sb);
+            }
+            if (successors.size() == 2 && !block.equals(graph.endBlock())) {
+                // Heuristic: if two successors, treat as conditional (then/else)
+                // Assume last node in block computes the condition (should be an Equal/Greater/etc.)
+                if (!nodes.isEmpty()) {
+                    Node condNode = nodes.get(nodes.size() - 1);
+                    Register condReg = registers.get(condNode);
+                    builder.append("    cmpl $0, ").append(getRegisterName(condReg)).append("\n");
+                    builder.append("    jne ").append(blockLabels.get(successors.get(0))).append("\n");
+                    builder.append("    jmp ").append(blockLabels.get(successors.get(1))).append("\n");
+                }
+            } else if (successors.size() == 1 && !block.equals(graph.endBlock())) {
+                builder.append("    jmp ").append(blockLabels.get(successors.get(0))).append("\n");
+            }
+            // Add successors to worklist
+            for (Block sb : successors) {
+                emitWorklist.add(sb);
+            }
+        }
     }
 
     private void collectAllNodes(Node node, Set<Node> visited) {
@@ -178,7 +275,10 @@ public class CodeGeneratorL2 {
                     builder.append("    movl ").append(getRegisterName(result)).append(", %eax\n");
                 }
             }
-            case Phi _, Block _, ProjNode _, StartNode _ -> {
+            case Phi phi -> {
+                // Do nothing here; phi moves are handled at the end of predecessor blocks
+            }
+            case Block _, ProjNode _, StartNode _ -> {
                 // do nothing
                 return;
             }
