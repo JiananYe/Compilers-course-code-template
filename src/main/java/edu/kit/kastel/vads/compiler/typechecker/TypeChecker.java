@@ -51,17 +51,13 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(DeclarationTree tree, Void data) {
-        String name = tree.name().name().asString();
-        if (variables.containsKey(name)) {
-            throw new TypeCheckException("Variable " + name + " already declared");
-        }
-        variables.put(name, tree.type().type());
         if (tree.initializer() != null) {
             Type initType = tree.initializer().accept(this, data);
             if (!initType.equals(tree.type().type())) {
-                throw new TypeCheckException("Type mismatch in declaration of " + name);
+                throw new TypeCheckException("Type mismatch in declaration initializer");
             }
         }
+        variables.put(tree.name().name().asString(), tree.type().type());
         return null;
     }
 
@@ -216,11 +212,11 @@ public class TypeChecker implements Visitor<Void, Type> {
     @Override
     public Type visit(TernaryTree tree, Void data) {
         Type condType = tree.condition().accept(this, data);
+        Type thenType = tree.thenExpr().accept(this, data);
+        Type elseType = tree.elseExpr().accept(this, data);
         if (!condType.equals(BasicType.BOOL)) {
             throw new TypeCheckException("Ternary condition must be of type bool");
         }
-        Type thenType = tree.thenExpr().accept(this, data);
-        Type elseType = tree.elseExpr().accept(this, data);
         if (!thenType.equals(elseType)) {
             throw new TypeCheckException("Ternary branches must have the same type");
         }

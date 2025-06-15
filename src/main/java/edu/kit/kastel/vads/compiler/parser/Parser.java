@@ -226,7 +226,19 @@ public class Parser {
     }
 
     private ExpressionTree parseExpression() {
-        return parseLogicalOr();
+        return parseTernary();
+    }
+
+    private ExpressionTree parseTernary() {
+        ExpressionTree condition = parseLogicalOr();
+        if (this.tokenSource.peek().isOperator(OperatorType.QUESTION)) {
+            this.tokenSource.consume();
+            ExpressionTree thenExpr = parseExpression();
+            this.tokenSource.expectOperator(OperatorType.COLON);
+            ExpressionTree elseExpr = parseExpression();
+            return new TernaryTree(condition, thenExpr, elseExpr, condition.span());
+        }
+        return condition;
     }
 
     private ExpressionTree parseLogicalOr() {
@@ -385,22 +397,10 @@ public class Parser {
                     this.tokenSource.consume();
                     yield new UnaryOperationTree(parseUnary(), OperatorType.BIT_NOT, op.span());
                 }
-                default -> parseTernary();
+                default -> parsePrimary();
             };
         }
-        return parseTernary();
-    }
-
-    private ExpressionTree parseTernary() {
-        ExpressionTree condition = parsePrimary();
-        if (this.tokenSource.peek().isOperator(OperatorType.QUESTION)) {
-            this.tokenSource.consume();
-            ExpressionTree thenExpr = parseExpression();
-            this.tokenSource.expectOperator(OperatorType.COLON);
-            ExpressionTree elseExpr = parseExpression();
-            return new TernaryTree(condition, thenExpr, elseExpr, condition.span());
-        }
-        return condition;
+        return parsePrimary();
     }
 
     private ExpressionTree parsePrimary() {
