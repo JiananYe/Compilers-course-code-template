@@ -242,8 +242,40 @@ public class SsaTranslation {
 
         @Override
         public Optional<Node> visit(IfTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for IfTree
-            throw new UnsupportedOperationException("IfTree SSA translation not yet implemented.");
+            pushSpan(tree);
+
+            // Evaluate the condition
+            Node condValue = tree.condition().accept(this, data).orElseThrow();
+
+            // Create blocks for then, else, and merge
+            Block thenBlock = new Block(data.constructor.graph());
+            Block elseBlock = new Block(data.constructor.graph());
+            Block mergeBlock = new Block(data.constructor.graph());
+
+            // Branch on the condition
+            thenBlock.addPredecessor(data.constructor.currentBlock());
+            elseBlock.addPredecessor(data.constructor.currentBlock());
+
+            // Then branch
+            data.constructor.setCurrentBlock(thenBlock);
+            tree.thenBranch().accept(this, data);
+            mergeBlock.addPredecessor(thenBlock);
+
+            // Else branch
+            if (tree.elseBranch() != null) {
+                data.constructor.setCurrentBlock(elseBlock);
+                tree.elseBranch().accept(this, data);
+                mergeBlock.addPredecessor(elseBlock);
+            } else {
+                // If no else, just connect elseBlock to mergeBlock
+                mergeBlock.addPredecessor(elseBlock);
+            }
+
+            // Merge
+            data.constructor.setCurrentBlock(mergeBlock);
+
+            popSpan();
+            return NOT_AN_EXPRESSION;
         }
 
         @Override
