@@ -96,7 +96,6 @@ public class CodeGeneratorL2 {
                 Register right = registers.get(predecessorSkipProj(add, BinaryOperationNode.RIGHT));
                 Node rightNode = predecessorSkipProj(add, BinaryOperationNode.RIGHT);
                 if (result.equals(left)) {
-                    // If right is a constant, emit addl $imm, %reg
                     if (rightNode instanceof ConstIntNode c) {
                         builder.append("    addl $").append(c.value()).append(", ").append(getRegisterName(result)).append("\n");
                     } else {
@@ -117,9 +116,8 @@ public class CodeGeneratorL2 {
                 Node rightNode = predecessorSkipProj(sub, BinaryOperationNode.RIGHT);
                 Register left = registers.get(leftNode);
                 Register right = registers.get(rightNode);
-                // Check for negation pattern: 0 - x
                 if (leftNode instanceof ConstIntNode c && c.value() == 0) {
-                    // Always use a temp register for negation to avoid overwriting
+                    // Negation pattern
                     builder.append("    movl ").append(getRegisterName(right)).append(", %ecx\n");
                     builder.append("    negl %ecx\n");
                     builder.append("    movl %ecx, ").append(getRegisterName(result)).append("\n");
@@ -164,28 +162,8 @@ public class CodeGeneratorL2 {
                 builder.append("    movl %edx, ").append(getRegisterName(result)).append("\n");
             }
             case ConstIntNode c -> {
-                boolean isRightOperandOfAdd = false;
-                boolean isNegationZero = false;
-                for (Node user : registers.keySet()) {
-                    if (user instanceof AddNode add) {
-                        Node rightNode = predecessorSkipProj(add, BinaryOperationNode.RIGHT);
-                        if (rightNode == c) {
-                            isRightOperandOfAdd = true;
-                            break;
-                        }
-                    }
-                    if (user instanceof SubNode sub) {
-                        Node leftNode = predecessorSkipProj(sub, BinaryOperationNode.LEFT);
-                        if (leftNode == c && c.value() == 0) {
-                            isNegationZero = true;
-                            break;
-                        }
-                    }
-                }
-                if (!isRightOperandOfAdd && !(c.value() == 0 && isNegationZero)) {
-                    Register reg = registers.get(c);
-                    builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
-                }
+                Register reg = registers.get(c);
+                builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
             }
             case ReturnNode r -> {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
