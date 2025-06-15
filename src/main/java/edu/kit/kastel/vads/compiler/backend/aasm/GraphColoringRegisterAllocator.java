@@ -131,6 +131,17 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
                 }
             }
         }
+        // Ensure both operands of each binary operation interfere
+        for (Node node : allNodes) {
+            if (node instanceof BinaryOperationNode) {
+                Node left = NodeSupport.predecessorSkipProj(node, BinaryOperationNode.LEFT);
+                Node right = NodeSupport.predecessorSkipProj(node, BinaryOperationNode.RIGHT);
+                if (needsRegister(left) && needsRegister(right)) {
+                    interferenceGraph.get(left).add(right);
+                    interferenceGraph.get(right).add(left);
+                }
+            }
+        }
     }
 
     private void scan(Node node, Set<Node> visited) {
