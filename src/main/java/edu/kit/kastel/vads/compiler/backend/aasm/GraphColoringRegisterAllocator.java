@@ -5,6 +5,7 @@ import edu.kit.kastel.vads.compiler.backend.regalloc.RegisterAllocator;
 import edu.kit.kastel.vads.compiler.ir.IrGraph;
 import edu.kit.kastel.vads.compiler.ir.node.*;
 import edu.kit.kastel.vads.compiler.ir.util.NodeSupport;
+import edu.kit.kastel.vads.compiler.ir.optimize.LivenessAnalyzer;
 
 import java.util.*;
 
@@ -109,44 +110,29 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
     }
 
     private void buildInterferenceGraph(IrGraph graph) {
-        // Initialize interference graph
+        // Use liveness analysis to build the interference graph
+        LivenessAnalyzer liveness = new LivenessAnalyzer(graph);
+        liveness.analyze();
+        Set<Node> allNodes = new HashSet<>();
+        // Collect all nodes that need registers
         Set<Node> visited = new HashSet<>();
         scan(graph.endBlock(), visited);
+        allNodes.addAll(interferenceGraph.keySet());
 
-        // For each node, add interference between all its operands
-        for (Node node : interferenceGraph.keySet()) {
-            List<Node> preds = node.predecessors().stream().map(n -> (Node) n).toList();
-            // Add interference between node and each of its operands
-            for (Node pred : preds) {
-                if (needsRegister(pred) && interferenceGraph.containsKey(pred)) {
-                    interferenceGraph.get(node).add(pred);
-                    interferenceGraph.get(pred).add(node);
-                }
-            }
-            // Add interference between all operands
-            for (int i = 0; i < preds.size(); ++i) {
-                for (int j = i + 1; j < preds.size(); ++j) {
-                    Node a = preds.get(i);
-                    Node b = preds.get(j);
-                    if (needsRegister(a) && needsRegister(b) && interferenceGraph.containsKey(a) && interferenceGraph.containsKey(b)) {
-                        interferenceGraph.get(a).add(b);
-                        interferenceGraph.get(b).add(a);
+        // For each node, add interference with all nodes live-out at that node
+        for (Node node : allNodes) {
+            Set<Node> liveOut = liveness.getLiveOut(node);
+            for (Node other : liveOut) {
+                if (other != node && needsRegister(other) && needsRegister(node)) {
+                    interferenceGraph.get(node).add(other);
+                    if (interferenceGraph.containsKey(other)) {
+                        interferenceGraph.get(other).add(node);
                     }
                 }
             }
         }
-
-        // Build interference edges (existing logic)
-        for (Node node : interferenceGraph.keySet()) {
-            for (Node other : interferenceGraph.keySet()) {
-                if (node != other && interferes(node, other)) {
-                    interferenceGraph.get(node).add(other);
-                    interferenceGraph.get(other).add(node);
-                }
-            }
-        }
         // Debug print: show interference graph
-        System.out.println("Interference graph:");
+        System.out.println("Interference graph (from liveness):");
         for (Map.Entry<Node, Set<Node>> entry : interferenceGraph.entrySet()) {
             System.out.println(entry.getKey() + " interferes with " + entry.getValue());
         }
