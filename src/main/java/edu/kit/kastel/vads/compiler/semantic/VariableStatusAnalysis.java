@@ -106,7 +106,21 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
 
     @Override
     public Unit visit(ForTree tree, Namespace<VariableStatus> data) {
-        return NoOpVisitor.super.visit(tree, data);
+        // Analyze initializer
+        if (tree.initializer() != null) {
+            tree.initializer().accept(this, data);
+        }
+        // Analyze condition
+        if (tree.condition() != null) {
+            tree.condition().accept(this, data);
+        }
+        // Analyze body
+        tree.body().accept(this, data);
+        // Analyze step
+        if (tree.step() != null) {
+            tree.step().accept(this, data);
+        }
+        return Unit.INSTANCE;
     }
 
     @Override
