@@ -114,7 +114,7 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
         LivenessAnalyzer liveness = new LivenessAnalyzer(graph);
         liveness.analyze();
         Set<Node> allNodes = new HashSet<>();
-        // Collect all nodes that need registers
+        collectAllNodes(graph.endBlock(), allNodes);
         Set<Node> visited = new HashSet<>();
         scan(graph.endBlock(), visited);
         allNodes.addAll(interferenceGraph.keySet());
@@ -130,11 +130,6 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
                     }
                 }
             }
-        }
-        // Debug print: show interference graph
-        System.out.println("Interference graph (from liveness):");
-        for (Map.Entry<Node, Set<Node>> entry : interferenceGraph.entrySet()) {
-            System.out.println(entry.getKey() + " interferes with " + entry.getValue());
         }
     }
 
@@ -223,16 +218,12 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
             ));
 
             // Remove registers used by interfering nodes
-            System.out.print("Assigning to " + node + ", available: " + availableRegs);
-            System.out.print(", interfering: [");
             for (Node interfering : fullInterferenceGraph.getOrDefault(node, Collections.emptySet())) {
                 Register reg = registers.get(interfering);
                 if (reg != null) {
                     availableRegs.remove(reg);
                 }
-                System.out.print(interfering + "=" + reg + ", ");
             }
-            System.out.print("]");
 
             // Special handling for division operands
             if (node.predecessors().stream().anyMatch(p -> p instanceof DivNode || p instanceof ModNode)) {
@@ -241,7 +232,6 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
                         Node divisor = NodeSupport.predecessorSkipProj(pred, BinaryOperationNode.RIGHT);
                         if (divisor == node) {
                             registers.put(node, new VirtualRegister(1)); // %rcx
-                            System.out.println(", chosen: %rcx (divisor)");
                             continue;
                         }
                     }
@@ -250,7 +240,6 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
 
             // For constants, use a different register each time
             if (node instanceof ConstIntNode) {
-                // Remove registers used by interfering nodes
                 for (Node interfering : fullInterferenceGraph.getOrDefault(node, Collections.emptySet())) {
                     Register reg = registers.get(interfering);
                     if (reg != null) {
@@ -265,20 +254,16 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
                     reg = new VirtualRegister(3 + stackOffset / 8);
                 }
                 registers.put(node, reg);
-                System.out.println(", chosen: " + reg + " (const)");
                 continue;
             }
 
             if (!availableRegs.isEmpty()) {
                 Register chosen = availableRegs.iterator().next();
                 registers.put(node, chosen);
-                System.out.println(", chosen: " + chosen);
             } else {
-                // No register available, must spill
                 int stackOffset = (registers.size() - NUM_PHYSICAL_REGS) * 8;
                 Register chosen = new VirtualRegister(3 + stackOffset / 8);
                 registers.put(node, chosen);
-                System.out.println(", chosen: " + chosen + " (spill)");
             }
         }
 
@@ -287,22 +272,6 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
             int stackOffset = (registers.size() - NUM_PHYSICAL_REGS) * 8;
             registers.put(node, new VirtualRegister(3 + stackOffset / 8));
         }
-
-        // Debug print: show register assignment
-        System.out.println("Register assignment:");
-        for (Map.Entry<Node, Register> entry : registers.entrySet()) {
-            System.out.println(entry.getKey() + " -> " + entry.getValue());
-        }
-        // Check for register assignment errors
-        for (Map.Entry<Node, Set<Node>> entry : fullInterferenceGraph.entrySet()) {
-            Node node = entry.getKey();
-            Register reg = registers.get(node);
-            for (Node neighbor : entry.getValue()) {
-                if (reg != null && reg.equals(registers.get(neighbor))) {
-                    System.out.println("ERROR: " + node + " and " + neighbor + " interfere but share register " + reg);
-                }
-            }
-        }
     }
 
     private static boolean needsRegister(Node node) {
@@ -310,5 +279,13 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
                 node instanceof StartNode || 
                 node instanceof Block || 
                 node instanceof ReturnNode);
+    }
+
+    // Add this method to collect all nodes reachable from a given node
+    private void collectAllNodes(Node node, Set<Node> visited) {
+        if (!visited.add(node)) return;
+        for (Node pred : node.predecessors()) {
+            collectAllNodes(pred, visited);
+        }
     }
 } 

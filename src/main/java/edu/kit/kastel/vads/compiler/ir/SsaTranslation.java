@@ -228,8 +228,8 @@ public class SsaTranslation {
         @Override
         public Optional<Node> visit(ReturnTree returnTree, SsaTranslation data) {
             pushSpan(returnTree);
-            Node node = returnTree.expression().accept(this, data).orElseThrow();
-            Node ret = data.constructor.newReturn(node);
+            Node value = returnTree.expression().accept(this, data).orElseThrow();
+            Node ret = data.constructor.newReturn(value);
             data.constructor.graph().endBlock().addPredecessor(ret);
             popSpan();
             return NOT_AN_EXPRESSION;

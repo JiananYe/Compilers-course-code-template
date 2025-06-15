@@ -62,8 +62,24 @@ public class CodeGeneratorL2 {
     }
 
     private void generateForGraph(IrGraph graph, StringBuilder builder, Map<Node, Register> registers) {
+        Set<Node> allNodes = new HashSet<>();
+        collectAllNodes(graph.endBlock(), allNodes);
         Set<Node> visited = new HashSet<>();
+        for (Node node : allNodes) {
+            if (node instanceof ReturnNode ret) {
+                Node result = ret.predecessor(ReturnNode.RESULT);
+                scan(result, visited, builder, registers);
+            }
+        }
+        // Scan the end block for epilogue code, with the same visited set
         scan(graph.endBlock(), visited, builder, registers);
+    }
+
+    private void collectAllNodes(Node node, Set<Node> visited) {
+        if (!visited.add(node)) return;
+        for (Node pred : node.predecessors()) {
+            collectAllNodes(pred, visited);
+        }
     }
 
     private void scan(Node node, Set<Node> visited, StringBuilder builder, Map<Node, Register> registers) {
@@ -78,11 +94,21 @@ public class CodeGeneratorL2 {
                 Register result = registers.get(add);
                 Register left = registers.get(predecessorSkipProj(add, BinaryOperationNode.LEFT));
                 Register right = registers.get(predecessorSkipProj(add, BinaryOperationNode.RIGHT));
+                Node rightNode = predecessorSkipProj(add, BinaryOperationNode.RIGHT);
                 if (result.equals(left)) {
-                    builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                    // If right is a constant, emit addl $imm, %reg
+                    if (rightNode instanceof ConstIntNode c) {
+                        builder.append("    addl $").append(c.value()).append(", ").append(getRegisterName(result)).append("\n");
+                    } else {
+                        builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                    }
                 } else {
                     builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
-                    builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                    if (rightNode instanceof ConstIntNode c) {
+                        builder.append("    addl $").append(c.value()).append(", ").append(getRegisterName(result)).append("\n");
+                    } else {
+                        builder.append("    addl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+                    }
                 }
             }
             case SubNode sub -> {
@@ -138,23 +164,28 @@ public class CodeGeneratorL2 {
                 builder.append("    movl %edx, ").append(getRegisterName(result)).append("\n");
             }
             case ConstIntNode c -> {
-                // Only emit movl for constants if not 0, or if not part of a negation pattern
+                boolean isRightOperandOfAdd = false;
                 boolean isNegationZero = false;
                 for (Node user : registers.keySet()) {
+                    if (user instanceof AddNode add) {
+                        Node rightNode = predecessorSkipProj(add, BinaryOperationNode.RIGHT);
+                        if (rightNode == c) {
+                            isRightOperandOfAdd = true;
+                            break;
+                        }
+                    }
                     if (user instanceof SubNode sub) {
                         Node leftNode = predecessorSkipProj(sub, BinaryOperationNode.LEFT);
-                        if (leftNode == c && leftNode instanceof ConstIntNode cc && cc.value() == 0) {
+                        if (leftNode == c && c.value() == 0) {
                             isNegationZero = true;
                             break;
                         }
                     }
                 }
-                if (c.value() == 0 && isNegationZero) {
-                    // Do not emit movl $0, ... for negation
-                    break;
+                if (!isRightOperandOfAdd && !(c.value() == 0 && isNegationZero)) {
+                    Register reg = registers.get(c);
+                    builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
                 }
-                Register reg = registers.get(c);
-                builder.append("    movl $").append(c.value()).append(", ").append(getRegisterName(reg)).append("\n");
             }
             case ReturnNode r -> {
                 Register result = registers.get(predecessorSkipProj(r, ReturnNode.RESULT));
