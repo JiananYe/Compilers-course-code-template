@@ -126,6 +126,10 @@ public class CodeGeneratorL2 {
             Block block = emitWorklist.pop();
             if (!emitted.add(block)) continue;
             builder.append(blockLabels.get(block)).append(":\n");
+            List<Block> successors = new ArrayList<>();
+            for (Node succ : graph.successors(block)) {
+                if (succ instanceof Block sb) successors.add(sb);
+            }
             // Emit code for all nodes in the block (except Phi)
             List<Node> nodes = blockNodes.getOrDefault(block, List.of());
             for (Node node : nodes) {
@@ -155,13 +159,8 @@ public class CodeGeneratorL2 {
                 }
             }
             // Emit control flow: if this block ends with a conditional, emit jump logic
-            List<Block> successors = new ArrayList<>();
-            for (Node succ : graph.successors(block)) {
-                if (succ instanceof Block sb) successors.add(sb);
-            }
             if (successors.size() == 2 && !block.equals(graph.endBlock())) {
                 // Heuristic: if two successors, treat as conditional (then/else)
-                // Assume last node in block computes the condition (should be an Equal/Greater/etc.)
                 if (!nodes.isEmpty()) {
                     Node condNode = nodes.get(nodes.size() - 1);
                     Register condReg = registers.get(condNode);
