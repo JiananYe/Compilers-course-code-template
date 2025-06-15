@@ -131,7 +131,8 @@ class GraphConstructor {
 
     Node addPhiOperands(Name variable, Phi phi) {
         for (Node pred : phi.block().predecessors()) {
-            phi.appendOperand(readVariable(variable, pred.block()));
+            Node operand = readVariable(variable, pred.block());
+            phi.appendOperand(operand);
         }
         return tryRemoveTrivialPhi(phi);
     }
@@ -232,6 +233,13 @@ class GraphConstructor {
 
     public Node newNot(Node operand) {
         return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.NotNode(currentBlock(), operand));
+    }
+
+    public Node newAnd(Node left, Node right) {
+        return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.AndNode(currentBlock(), left, right));
+    }
+    public Node newXor(Node left, Node right) {
+        return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.XorNode(currentBlock(), left, right));
     }
 
 }

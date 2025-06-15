@@ -8,4 +8,9 @@ public record BooleanLiteralTree(boolean value, Span span) implements Expression
     public <T, R> R accept(Visitor<T, R> visitor, T data) {
         return visitor.visit(this, data);
     }
+
+    @Override
+    public String toString() {
+        return "BooleanLiteralTree[value=" + value + "]";
+    }
 } 

@@ -57,15 +57,15 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         }
     }
 
-    private static void checkUndeclared(NameTree name, VariableStatus status) {
-        if (status != null) {
+    private static void checkUndeclared(NameTree name, Namespace<VariableStatus> data) {
+        if (data.containsKey(name)) {
             throw new SemanticException("Variable " + name + " is already declared");
         }
     }
 
     @Override
     public Unit visit(DeclarationTree declarationTree, Namespace<VariableStatus> data) {
-        checkUndeclared(declarationTree.name(), data.get(declarationTree.name()));
+        checkUndeclared(declarationTree.name(), data);
         VariableStatus status = declarationTree.initializer() == null
             ? VariableStatus.DECLARED
             : VariableStatus.INITIALIZED;
@@ -106,19 +106,22 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
 
     @Override
     public Unit visit(ForTree tree, Namespace<VariableStatus> data) {
-        // Analyze initializer
+        // Create a new scope for the for loop
+        Namespace<VariableStatus> loopScope = new Namespace<>(data);
+
+        // Analyze initializer (may declare a new variable)
         if (tree.initializer() != null) {
-            tree.initializer().accept(this, data);
+            tree.initializer().accept(this, loopScope);
         }
         // Analyze condition
         if (tree.condition() != null) {
-            tree.condition().accept(this, data);
+            tree.condition().accept(this, loopScope);
         }
         // Analyze body
-        tree.body().accept(this, data);
+        tree.body().accept(this, loopScope);
         // Analyze step
         if (tree.step() != null) {
-            tree.step().accept(this, data);
+            tree.step().accept(this, loopScope);
         }
         return Unit.INSTANCE;
     }

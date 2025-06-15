@@ -11,8 +11,10 @@ import edu.kit.kastel.vads.compiler.parser.ast.ForTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
+import edu.kit.kastel.vads.compiler.parser.ast.BlockTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
+import edu.kit.kastel.vads.compiler.parser.ast.ExpressionTree;
 
 /// Checks that functions return.
 /// Currently only works for straight-line code.
@@ -44,22 +46,59 @@ class ReturnAnalysis implements NoOpVisitor<ReturnAnalysis.ReturnState> {
 
     @Override
     public Unit visit(IfTree tree, ReturnState data) {
+        Boolean constCond = tryConstantFold(tree.condition());
         boolean thenReturns = false;
         boolean elseReturns = false;
-
-        ReturnState thenState = new ReturnState();
-        tree.thenBranch().accept(this, thenState);
-        thenReturns = thenState.returns;
-
-        if (tree.elseBranch() != null) {
-            ReturnState elseState = new ReturnState();
-            tree.elseBranch().accept(this, elseState);
-            elseReturns = elseState.returns;
+        if (constCond != null) {
+            if (constCond) {
+                ReturnState thenState = new ReturnState();
+                tree.thenBranch().accept(this, thenState);
+                thenReturns = thenState.returns;
+                elseReturns = true; // else branch is unreachable
+            } else {
+                if (tree.elseBranch() != null) {
+                    ReturnState elseState = new ReturnState();
+                    tree.elseBranch().accept(this, elseState);
+                    elseReturns = elseState.returns;
+                } else {
+                    elseReturns = false;
+                }
+                thenReturns = true; // then branch is unreachable
+            }
         } else {
-            elseReturns = false;
+            ReturnState thenState = new ReturnState();
+            tree.thenBranch().accept(this, thenState);
+            thenReturns = thenState.returns;
+            if (tree.elseBranch() != null) {
+                ReturnState elseState = new ReturnState();
+                tree.elseBranch().accept(this, elseState);
+                elseReturns = elseState.returns;
+            } else {
+                elseReturns = false;
+            }
         }
         data.returns = thenReturns && elseReturns;
         return Unit.INSTANCE;
+    }
+
+    // Try to constant-fold a boolean expression tree
+    private Boolean tryConstantFold(ExpressionTree expr) {
+        int notCount = 0;
+        while (expr instanceof UnaryOperationTree u && u.operator() == edu.kit.kastel.vads.compiler.lexer.Operator.OperatorType.LOGICAL_NOT) {
+            notCount++;
+            expr = u.operand();
+        }
+        Boolean value = null;
+        if (expr instanceof BooleanLiteralTree b) {
+            value = b.value();
+        } else if (expr instanceof NegateTree n) {
+            Boolean inner = tryConstantFold(n.expression());
+            value = inner == null ? null : !inner;
+        }
+        if (value != null) {
+            return (notCount % 2 == 0) ? value : !value;
+        }
+        return null;
     }
 
     @Override
@@ -97,5 +136,13 @@ class ReturnAnalysis implements NoOpVisitor<ReturnAnalysis.ReturnState> {
     @Override
     public Unit visit(NegateTree tree, ReturnState data) {
         return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(BlockTree tree, ReturnState data) {
+        for (var stmt : tree.statements()) {
+            stmt.accept(this, data);
+        }
+        return Unit.INSTANCE;
     }
 }

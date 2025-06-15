@@ -68,7 +68,8 @@ public class SsaTranslation {
     }
 
     private Node readVariable(Name variable, Block block) {
-        return this.constructor.readVariable(variable, block);
+        Node value = this.constructor.readVariable(variable, block);
+        return value;
     }
 
     private Block currentBlock() {
@@ -104,6 +105,9 @@ public class SsaTranslation {
                 case ASSIGN_MOD -> (lhs, rhs) -> projResultDivMod(data, data.constructor.newMod(lhs, rhs));
                 case ASSIGN_SHIFT_LEFT -> data.constructor::newShl;
                 case ASSIGN_SHIFT_RIGHT -> data.constructor::newShr;
+                case ASSIGN_BIT_AND -> data.constructor::newAnd;
+                case ASSIGN_BIT_XOR -> data.constructor::newXor;
+                case ASSIGN_BIT_OR -> data.constructor::newOr;
                 case ASSIGN -> null;
                 default ->
                     throw new IllegalArgumentException("not an assignment operator " + assignmentTree.operator());
@@ -140,6 +144,8 @@ public class SsaTranslation {
                 case EQUAL -> data.constructor.newEqual(lhs, rhs);
                 case NOT_EQUAL -> data.constructor.newNotEqual(lhs, rhs);
                 case BIT_OR -> data.constructor.newOr(lhs, rhs);
+                case BIT_AND -> data.constructor.newAnd(lhs, rhs);
+                case BIT_XOR -> data.constructor.newXor(lhs, rhs);
                 default ->
                     throw new IllegalArgumentException("not a binary expression operator " + binaryOperationTree.operatorType());
             };
@@ -316,6 +322,8 @@ public class SsaTranslation {
             breakTargets.pop();
 
             data.constructor.setCurrentBlock(exitBlock);
+            // Seal the exit block to finalize Phi nodes
+            data.constructor.sealBlock(exitBlock);
 
             popSpan();
             return NOT_AN_EXPRESSION;
@@ -325,19 +333,92 @@ public class SsaTranslation {
         public Optional<Node> visit(ForTree tree, SsaTranslation data) {
             pushSpan(tree);
 
-            // 1. Translate the initializer (if present)
+            // 1. Collect all variables assigned in the loop
+            java.util.Set<edu.kit.kastel.vads.compiler.parser.symbol.Name> assignedVars = new java.util.HashSet<>();
+            Visitor<SsaTranslation, Void> assignmentTracker = new Visitor<>() {
+                @Override public Void visit(AssignmentTree t, SsaTranslation d) {
+                    if (t.lValue() instanceof LValueIdentTree lval) {
+                        assignedVars.add(lval.name().name());
+                    }
+                    return null;
+                }
+                @Override public Void visit(DeclarationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BlockTree t, SsaTranslation d) { for (StatementTree s : t.statements()) s.accept(this, d); return null; }
+                @Override public Void visit(IfTree t, SsaTranslation d) { t.thenBranch().accept(this, d); if (t.elseBranch() != null) t.elseBranch().accept(this, d); return null; }
+                @Override public Void visit(WhileTree t, SsaTranslation d) { t.body().accept(this, d); return null; }
+                @Override public Void visit(ForTree t, SsaTranslation d) { t.body().accept(this, d); return null; }
+                @Override public Void visit(ContinueTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BreakTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(ReturnTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BinaryOperationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(NegateTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(UnaryOperationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(IdentExpressionTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(LiteralTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BooleanLiteralTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(TernaryTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(LValueIdentTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(NameTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(TypeTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(FunctionTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(ProgramTree t, SsaTranslation d) { return null; }
+            };
+            tree.body().accept(assignmentTracker, data);
+            if (tree.step() != null) tree.step().accept(assignmentTracker, data);
+
+            // 2. Translate the initializer (if present)
             if (tree.initializer() != null) {
                 tree.initializer().accept(this, data);
             }
 
-            // 2. Transform the body: insert step before every continue and at the end
+            // 3. Create explicit loop header block
+            Block preLoopBlock = data.currentBlock();
+            Block loopHeader = new Block(data.constructor.graph());
+            loopHeader.addPredecessor(preLoopBlock);
+            data.constructor.setCurrentBlock(loopHeader);
+
+            // 4. Insert Phi nodes for all assigned variables
+            java.util.Map<edu.kit.kastel.vads.compiler.parser.symbol.Name, Phi> phiNodes = new java.util.HashMap<>();
+            for (var var : assignedVars) {
+                Node initVal = data.readVariable(var, preLoopBlock);
+                Phi phi = data.constructor.graph().startBlock() == loopHeader ? null : data.constructor.newPhi();
+                if (phi != null) {
+                    phi.appendOperand(initVal); // incoming from before loop
+                    data.writeVariable(var, loopHeader, phi);
+                    phiNodes.put(var, phi);
+                }
+            }
+
+            // 5. Transform the body: insert step before every continue and at the end
             StatementTree transformedBody = insertStepBeforeContinueAndEnd(tree.body(), tree.step());
 
-            // 3. Create a WhileTree with the condition and the transformed body
-            WhileTree whileTree = new WhileTree(tree.condition(), transformedBody, tree.span());
+            // 6. Create loop body and exit blocks
+            Block bodyBlock = new Block(data.constructor.graph());
+            Block exitBlock = new Block(data.constructor.graph());
 
-            // 4. Visit the while loop
-            whileTree.accept(this, data);
+            // 7. Evaluate condition in loop header
+            Node condValue = tree.condition().accept(this, data).orElseThrow();
+            bodyBlock.addPredecessor(loopHeader);
+            exitBlock.addPredecessor(loopHeader);
+
+            // 8. Loop body
+            data.constructor.setCurrentBlock(bodyBlock);
+            transformedBody.accept(this, data);
+
+            // After the loop body, update phi variable mapping for the backedge
+            for (var entry : phiNodes.entrySet()) {
+                data.writeVariable(entry.getKey(), loopHeader, data.readVariable(entry.getKey(), bodyBlock));
+            }
+
+            loopHeader.addPredecessor(bodyBlock); // backedge
+
+            // 9. After loop, set current block to exit
+            data.constructor.setCurrentBlock(exitBlock);
+
+            // 10. Seal blocks
+            data.constructor.sealBlock(loopHeader);
+            data.constructor.sealBlock(bodyBlock);
+            data.constructor.sealBlock(exitBlock);
 
             popSpan();
             return NOT_AN_EXPRESSION;

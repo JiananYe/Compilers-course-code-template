@@ -9,4 +9,9 @@ public record UnaryOperationTree(ExpressionTree operand, OperatorType operator, 
     public <T, R> R accept(Visitor<T, R> visitor, T data) {
         return visitor.visit(this, data);
     }
+
+    @Override
+    public String toString() {
+        return "UnaryOperationTree[operator=" + operator + ", operand=" + operand + "]";
+    }
 } 

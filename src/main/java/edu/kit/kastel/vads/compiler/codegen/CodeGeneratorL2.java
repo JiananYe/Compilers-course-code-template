@@ -22,6 +22,8 @@ import edu.kit.kastel.vads.compiler.ir.node.ShrNode;
 import edu.kit.kastel.vads.compiler.ir.node.OrNode;
 import edu.kit.kastel.vads.compiler.ir.node.NotNode;
 import edu.kit.kastel.vads.compiler.ir.node.EqualNode;
+import edu.kit.kastel.vads.compiler.ir.node.AndNode;
+import edu.kit.kastel.vads.compiler.ir.node.XorNode;
 
 import java.util.HashSet;
 import java.util.List;
@@ -231,6 +233,24 @@ public class CodeGeneratorL2 {
                 builder.append("    cmpl ").append(getRegisterName(right)).append(", %eax\n");
                 builder.append("    sete %al\n");
                 builder.append("    movzbl %al, ").append(getRegisterName(result)).append("\n");
+            }
+            case AndNode and -> {
+                Register result = registers.get(and);
+                Register left = registers.get(predecessorSkipProj(and, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(and, BinaryOperationNode.RIGHT));
+                if (!result.equals(left)) {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                }
+                builder.append("    andl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+            }
+            case XorNode xor -> {
+                Register result = registers.get(xor);
+                Register left = registers.get(predecessorSkipProj(xor, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(xor, BinaryOperationNode.RIGHT));
+                if (!result.equals(left)) {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                }
+                builder.append("    xorl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
             }
             default -> throw new UnsupportedOperationException("Unsupported node type: " + node.getClass().getSimpleName());
         }
