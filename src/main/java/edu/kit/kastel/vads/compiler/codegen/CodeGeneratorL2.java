@@ -19,6 +19,7 @@ import edu.kit.kastel.vads.compiler.ir.node.StartNode;
 import edu.kit.kastel.vads.compiler.ir.node.SubNode;
 import edu.kit.kastel.vads.compiler.ir.node.ShlNode;
 import edu.kit.kastel.vads.compiler.ir.node.ShrNode;
+import edu.kit.kastel.vads.compiler.ir.node.OrNode;
 
 import java.util.HashSet;
 import java.util.List;
@@ -202,6 +203,15 @@ public class CodeGeneratorL2 {
                     builder.append("    movl ").append(getRegisterName(right)).append(", %ecx\n");
                 }
                 builder.append("    sarl %cl, ").append(getRegisterName(result)).append("\n");
+            }
+            case OrNode or -> {
+                Register result = registers.get(or);
+                Register left = registers.get(predecessorSkipProj(or, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(or, BinaryOperationNode.RIGHT));
+                if (!result.equals(left)) {
+                    builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
+                }
+                builder.append("    orl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
             }
             default -> throw new UnsupportedOperationException("Unsupported node type: " + node.getClass().getSimpleName());
         }

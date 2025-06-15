@@ -139,6 +139,7 @@ public class SsaTranslation {
                 case LESS_EQUAL -> data.constructor.newLessEqual(lhs, rhs);
                 case EQUAL -> data.constructor.newEqual(lhs, rhs);
                 case NOT_EQUAL -> data.constructor.newNotEqual(lhs, rhs);
+                case BIT_OR -> data.constructor.newOr(lhs, rhs);
                 default ->
                     throw new IllegalArgumentException("not a binary expression operator " + binaryOperationTree.operatorType());
             };

@@ -226,4 +226,8 @@ class GraphConstructor {
         return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.ShrNode(currentBlock(), left, right));
     }
 
+    public Node newOr(Node left, Node right) {
+        return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.OrNode(currentBlock(), left, right));
+    }
+
 }
