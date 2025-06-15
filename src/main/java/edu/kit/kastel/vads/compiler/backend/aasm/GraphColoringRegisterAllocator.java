@@ -32,6 +32,12 @@ public class GraphColoringRegisterAllocator implements RegisterAllocator {
         coalesce();
         simplify();
         select();
+        // Ensure all nodes that need a register get one
+        for (Node n : graph.getAllNodes()) {
+            if (needsRegister(n) && !registers.containsKey(n)) {
+                registers.put(n, new VirtualRegister(registers.size()));
+            }
+        }
         return Map.copyOf(registers);
     }
 

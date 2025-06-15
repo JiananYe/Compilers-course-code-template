@@ -23,6 +23,12 @@ public class AasmRegisterAllocator implements RegisterAllocator {
         Set<Node> visited = new HashSet<>();
         visited.add(graph.endBlock());
         scan(graph.endBlock(), visited);
+        // Ensure all nodes that need a register get one
+        for (Node n : graph.getAllNodes()) {
+            if (needsRegister(n) && !registers.containsKey(n)) {
+                registers.put(n, new VirtualRegister(this.id++));
+            }
+        }
         return Map.copyOf(this.registers);
     }
 

@@ -170,10 +170,14 @@ public class SsaTranslation {
         @Override
         public Optional<Node> visit(DeclarationTree declarationTree, SsaTranslation data) {
             pushSpan(declarationTree);
+            Node rhs = null;
             if (declarationTree.initializer() != null) {
-                Node rhs = declarationTree.initializer().accept(this, data).orElseThrow();
-                data.writeVariable(declarationTree.name().name(), data.currentBlock(), rhs);
+                rhs = declarationTree.initializer().accept(this, data).orElseThrow();
+            } else {
+                // Default initialize int to 0
+                rhs = data.constructor.newConstInt(0);
             }
+            data.writeVariable(declarationTree.name().name(), data.currentBlock(), rhs);
             popSpan();
             return NOT_AN_EXPRESSION;
         }
@@ -298,29 +302,84 @@ public class SsaTranslation {
         public Optional<Node> visit(WhileTree tree, SsaTranslation data) {
             pushSpan(tree);
 
+            // 1. Collect all variables assigned in the loop body
+            java.util.Set<edu.kit.kastel.vads.compiler.parser.symbol.Name> assignedVars = new java.util.HashSet<>();
+            Visitor<SsaTranslation, Void> assignmentTracker = new Visitor<>() {
+                @Override public Void visit(AssignmentTree t, SsaTranslation d) {
+                    if (t.lValue() instanceof LValueIdentTree lval) {
+                        assignedVars.add(lval.name().name());
+                    }
+                    return null;
+                }
+                @Override public Void visit(DeclarationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BlockTree t, SsaTranslation d) { for (StatementTree s : t.statements()) s.accept(this, d); return null; }
+                @Override public Void visit(IfTree t, SsaTranslation d) { t.thenBranch().accept(this, d); if (t.elseBranch() != null) t.elseBranch().accept(this, d); return null; }
+                @Override public Void visit(WhileTree t, SsaTranslation d) { t.body().accept(this, d); return null; }
+                @Override public Void visit(ForTree t, SsaTranslation d) { t.body().accept(this, d); return null; }
+                @Override public Void visit(ContinueTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BreakTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(ReturnTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BinaryOperationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(NegateTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(UnaryOperationTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(IdentExpressionTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(LiteralTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(BooleanLiteralTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(TernaryTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(LValueIdentTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(NameTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(TypeTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(FunctionTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(ProgramTree t, SsaTranslation d) { return null; }
+            };
+            tree.body().accept(assignmentTracker, data);
+
+            // 2. Create preheader block for initialization
+            Block preheader = data.currentBlock();
             Block condBlock = new Block(data.constructor.graph());
             Block bodyBlock = new Block(data.constructor.graph());
             Block exitBlock = new Block(data.constructor.graph());
 
-            condBlock.addPredecessor(data.constructor.currentBlock());
+            condBlock.addPredecessor(preheader);
             data.constructor.setCurrentBlock(condBlock);
+
+            // 3. Insert phi nodes for all assigned variables
+            java.util.Map<edu.kit.kastel.vads.compiler.parser.symbol.Name, Phi> phiNodes = new java.util.HashMap<>();
+            for (var var : assignedVars) {
+                Node initVal = data.readVariable(var, preheader);
+                Phi phi = data.constructor.newPhi();
+                phi.appendOperand(initVal); // incoming from before loop
+                data.writeVariable(var, condBlock, phi);
+                phiNodes.put(var, phi);
+            }
 
             // Push loop targets
             continueTargets.push(condBlock);
             breakTargets.push(exitBlock);
 
+            // 4. Evaluate condition in loop header
             Node condValue = tree.condition().accept(this, data).orElseThrow();
             bodyBlock.addPredecessor(condBlock);
             exitBlock.addPredecessor(condBlock);
 
+            // 5. Loop body
             data.constructor.setCurrentBlock(bodyBlock);
             tree.body().accept(this, data);
-            condBlock.addPredecessor(bodyBlock);
+
+            // 6. After the loop body, update phi variable mapping for the backedge and append operand
+            for (var entry : phiNodes.entrySet()) {
+                Phi phi = entry.getValue();
+                Node backedgeValue = data.readVariable(entry.getKey(), bodyBlock);
+                phi.appendOperand(backedgeValue); // Ensure both operands are present
+                data.writeVariable(entry.getKey(), condBlock, phi);
+            }
+            condBlock.addPredecessor(bodyBlock); // backedge
 
             // Pop loop targets
             continueTargets.pop();
             breakTargets.pop();
 
+            // 7. After loop, set current block to exit
             data.constructor.setCurrentBlock(exitBlock);
             // Seal the exit block to finalize Phi nodes
             data.constructor.sealBlock(exitBlock);
@@ -413,9 +472,12 @@ public class SsaTranslation {
             continueTargets.pop();
             breakTargets.pop();
 
-            // After the loop body, update phi variable mapping for the backedge
+            // After the loop body, update phi variable mapping for the backedge and append operand
             for (var entry : phiNodes.entrySet()) {
-                data.writeVariable(entry.getKey(), loopHeader, data.readVariable(entry.getKey(), bodyBlock));
+                Phi phi = entry.getValue();
+                Node backedgeValue = data.readVariable(entry.getKey(), bodyBlock);
+                phi.appendOperand(backedgeValue); // Ensure both operands are present
+                data.writeVariable(entry.getKey(), loopHeader, phi);
             }
 
             loopHeader.addPredecessor(bodyBlock); // backedge

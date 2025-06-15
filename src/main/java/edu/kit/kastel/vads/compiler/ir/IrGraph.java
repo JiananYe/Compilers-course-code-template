@@ -8,6 +8,9 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.SequencedSet;
 import java.util.Set;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.ArrayDeque;
 
 public class IrGraph {
     private final Map<Node, SequencedSet<Node>> successors = new IdentityHashMap<>();
@@ -49,5 +52,25 @@ public class IrGraph {
     /// {@return the name of this graph}
     public String name() {
         return name;
+    }
+
+    // Added: Return all nodes in the graph by traversing both successors and predecessors
+    public Set<Node> getAllNodes() {
+        Set<Node> visited = new HashSet<>();
+        Deque<Node> stack = new ArrayDeque<>();
+        stack.push(this.startBlock);
+        stack.push(this.endBlock);
+        while (!stack.isEmpty()) {
+            Node node = stack.pop();
+            if (visited.add(node)) {
+                for (Node succ : this.successors(node)) {
+                    stack.push(succ);
+                }
+                for (Node pred : node.predecessors()) {
+                    stack.push(pred);
+                }
+            }
+        }
+        return visited;
     }
 }
