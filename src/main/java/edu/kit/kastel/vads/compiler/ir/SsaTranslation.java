@@ -401,9 +401,17 @@ public class SsaTranslation {
             bodyBlock.addPredecessor(loopHeader);
             exitBlock.addPredecessor(loopHeader);
 
+            // Push loop targets (fix)
+            continueTargets.push(loopHeader);
+            breakTargets.push(exitBlock);
+
             // 8. Loop body
             data.constructor.setCurrentBlock(bodyBlock);
             transformedBody.accept(this, data);
+
+            // Pop loop targets (fix)
+            continueTargets.pop();
+            breakTargets.pop();
 
             // After the loop body, update phi variable mapping for the backedge
             for (var entry : phiNodes.entrySet()) {
