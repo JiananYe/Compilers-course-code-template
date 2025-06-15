@@ -20,6 +20,8 @@ import edu.kit.kastel.vads.compiler.ir.node.SubNode;
 import edu.kit.kastel.vads.compiler.ir.node.ShlNode;
 import edu.kit.kastel.vads.compiler.ir.node.ShrNode;
 import edu.kit.kastel.vads.compiler.ir.node.OrNode;
+import edu.kit.kastel.vads.compiler.ir.node.NotNode;
+import edu.kit.kastel.vads.compiler.ir.node.EqualNode;
 
 import java.util.HashSet;
 import java.util.List;
@@ -212,6 +214,23 @@ public class CodeGeneratorL2 {
                     builder.append("    movl ").append(getRegisterName(left)).append(", ").append(getRegisterName(result)).append("\n");
                 }
                 builder.append("    orl ").append(getRegisterName(right)).append(", ").append(getRegisterName(result)).append("\n");
+            }
+            case NotNode not -> {
+                Register result = registers.get(not);
+                Register operand = registers.get(not.predecessors().get(0));
+                if (!result.equals(operand)) {
+                    builder.append("    movl ").append(getRegisterName(operand)).append(", ").append(getRegisterName(result)).append("\n");
+                }
+                builder.append("    notl ").append(getRegisterName(result)).append("\n");
+            }
+            case EqualNode eq -> {
+                Register result = registers.get(eq);
+                Register left = registers.get(predecessorSkipProj(eq, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(eq, BinaryOperationNode.RIGHT));
+                builder.append("    movl ").append(getRegisterName(left)).append(", %eax\n");
+                builder.append("    cmpl ").append(getRegisterName(right)).append(", %eax\n");
+                builder.append("    sete %al\n");
+                builder.append("    movzbl %al, ").append(getRegisterName(result)).append("\n");
             }
             default -> throw new UnsupportedOperationException("Unsupported node type: " + node.getClass().getSimpleName());
         }

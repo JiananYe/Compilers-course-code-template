@@ -230,4 +230,8 @@ class GraphConstructor {
         return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.OrNode(currentBlock(), left, right));
     }
 
+    public Node newNot(Node operand) {
+        return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.NotNode(currentBlock(), operand));
+    }
+
 }

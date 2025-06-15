@@ -219,8 +219,15 @@ public class SsaTranslation {
 
         @Override
         public Optional<Node> visit(UnaryOperationTree tree, SsaTranslation data) {
-            // TODO: Implement SSA translation for UnaryOperationTree
-            throw new UnsupportedOperationException("UnaryOperationTree SSA translation not yet implemented.");
+            pushSpan(tree);
+            Node operand = tree.operand().accept(this, data).orElseThrow();
+            Node result = switch (tree.operator()) {
+                case LOGICAL_NOT -> data.constructor.newEqual(operand, data.constructor.newConstInt(0));
+                case BIT_NOT -> data.constructor.newNot(operand);
+                default -> throw new IllegalArgumentException("Unsupported unary operator: " + tree.operator());
+            };
+            popSpan();
+            return Optional.of(result);
         }
 
         @Override
