@@ -210,6 +210,8 @@ public class SsaTranslation {
                     data.constructor.setCurrentBlock(mergeBlock);
                     yield phi;
                 }
+                case SHIFT_LEFT -> data.constructor.newShl(lhs, rhs);
+                case SHIFT_RIGHT -> data.constructor.newShr(lhs, rhs);
                 default ->
                     throw new IllegalArgumentException("not a binary expression operator " + binaryOperationTree.operatorType());
             };
