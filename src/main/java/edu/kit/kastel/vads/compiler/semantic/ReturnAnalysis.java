@@ -140,8 +140,14 @@ class ReturnAnalysis implements NoOpVisitor<ReturnAnalysis.ReturnState> {
 
     @Override
     public Unit visit(BlockTree tree, ReturnState data) {
+        data.returns = false;
         for (var stmt : tree.statements()) {
-            stmt.accept(this, data);
+            ReturnState stmtState = new ReturnState();
+            stmt.accept(this, stmtState);
+            if (stmtState.returns) {
+                data.returns = true;
+                break; // Dead code after return
+            }
         }
         return Unit.INSTANCE;
     }
