@@ -164,10 +164,19 @@ public class RecursivePostorderVisitor<T, R> implements Visitor<T, R> {
 
     @Override
     public R visit(ForTree tree, T data) {
-        R r = tree.initializer().accept(this, data);
+        R r = null;
+        if (tree.initializer() != null) {
+            r = tree.initializer().accept(this, data);
+        } else {
+            r = data == null ? null : (R) data;
+        }
         r = tree.condition().accept(this, accumulate(data, r));
-        r = tree.step().accept(this, accumulate(data, r));
-        r = tree.body().accept(this, accumulate(data, r));
+        if (tree.step() != null) {
+            r = tree.step().accept(this, accumulate(data, r));
+        }
+        if (tree.body() != null) {
+            r = tree.body().accept(this, accumulate(data, r));
+        }
         r = this.visitor.visit(tree, accumulate(data, r));
         return r;
     }
