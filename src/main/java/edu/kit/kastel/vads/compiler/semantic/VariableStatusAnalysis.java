@@ -101,7 +101,15 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
 
     @Override
     public Unit visit(WhileTree tree, Namespace<VariableStatus> data) {
-        return NoOpVisitor.super.visit(tree, data);
+        // Analyze condition for variable use
+        if (tree.condition() != null) {
+            tree.condition().accept(this, data);
+        }
+        // Analyze body in a new scope, but do not propagate initialization
+        Namespace<VariableStatus> bodyScope = new Namespace<>(data);
+        tree.body().accept(this, bodyScope);
+        // Do NOT update 'data' with any initializations from the body
+        return Unit.INSTANCE;
     }
 
     @Override
@@ -150,6 +158,18 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
     @Override
     public Unit visit(NegateTree tree, Namespace<VariableStatus> data) {
         return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(edu.kit.kastel.vads.compiler.parser.ast.BlockTree blockTree, Namespace<VariableStatus> data) {
+        // Create a new scope for the block
+        Namespace<VariableStatus> blockScope = new Namespace<>(data);
+        for (var stmt : blockTree.statements()) {
+            stmt.accept(this, blockScope);
+        }
+        // Do NOT propagate variable initialization from blockScope to data
+        // This ensures variables declared/assigned in the block are not considered initialized outside
+        return Unit.INSTANCE;
     }
 
     enum VariableStatus {
