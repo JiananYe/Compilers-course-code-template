@@ -44,8 +44,24 @@ public class Lexer {
             case '<' -> handleLessThan();
             case '>' -> handleGreaterThan();
             case '!' -> doubleOrSingle(OperatorType.LOGICAL_NOT, OperatorType.NOT_EQUAL);
-            case '&' -> doubleOrSingle(OperatorType.BIT_AND, OperatorType.LOGICAL_AND);
-            case '|' -> doubleOrSingle(OperatorType.BIT_OR, OperatorType.LOGICAL_OR);
+            case '&' -> {
+                if (hasMore(1) && peek(1) == '&') {
+                    yield new Operator(OperatorType.LOGICAL_AND, buildSpan(2));
+                } else if (hasMore(1) && peek(1) == '=') {
+                    yield new Operator(OperatorType.ASSIGN_BIT_AND, buildSpan(2));
+                } else {
+                    yield new Operator(OperatorType.BIT_AND, buildSpan(1));
+                }
+            }
+            case '|' -> {
+                if (hasMore(1) && peek(1) == '|') {
+                    yield new Operator(OperatorType.LOGICAL_OR, buildSpan(2));
+                } else if (hasMore(1) && peek(1) == '=') {
+                    yield new Operator(OperatorType.ASSIGN_BIT_OR, buildSpan(2));
+                } else {
+                    yield new Operator(OperatorType.BIT_OR, buildSpan(1));
+                }
+            }
             case '^' -> singleOrAssign(OperatorType.BIT_XOR, OperatorType.ASSIGN_BIT_XOR);
             case '~' -> new Operator(OperatorType.BIT_NOT, buildSpan(1));
             case '?' -> new Operator(OperatorType.QUESTION, buildSpan(1));

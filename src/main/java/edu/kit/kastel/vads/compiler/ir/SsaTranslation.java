@@ -146,6 +146,70 @@ public class SsaTranslation {
                 case BIT_OR -> data.constructor.newOr(lhs, rhs);
                 case BIT_AND -> data.constructor.newAnd(lhs, rhs);
                 case BIT_XOR -> data.constructor.newXor(lhs, rhs);
+                case LOGICAL_OR -> {
+                    // Elaborate a || b to a ? true : b using control flow and phi node
+                    // Evaluate lhs (condition)
+                    // Create blocks for then, else, and merge
+                    Block condBlock = data.constructor.currentBlock();
+                    Block thenBlock = new Block(data.constructor.graph());
+                    Block elseBlock = new Block(data.constructor.graph());
+                    Block mergeBlock = new Block(data.constructor.graph());
+
+                    // Branch on lhs
+                    thenBlock.addPredecessor(condBlock);
+                    elseBlock.addPredecessor(condBlock);
+
+                    // Then branch: result is 1
+                    data.constructor.setCurrentBlock(thenBlock);
+                    Node thenValue = data.constructor.newConstInt(1);
+                    mergeBlock.addPredecessor(thenBlock);
+
+                    // Else branch: result is rhs
+                    data.constructor.setCurrentBlock(elseBlock);
+                    Node elseValue = rhs;
+                    mergeBlock.addPredecessor(elseBlock);
+
+                    // Merge
+                    data.constructor.setCurrentBlock(mergeBlock);
+                    Node phi = data.constructor.newPhi();
+                    ((Phi) phi).appendOperand(thenValue);
+                    ((Phi) phi).appendOperand(elseValue);
+
+                    // Restore current block to merge
+                    data.constructor.setCurrentBlock(mergeBlock);
+                    yield phi;
+                }
+                case LOGICAL_AND -> {
+                    // Elaborate a && b to a ? b : false using control flow and phi node
+                    Block condBlock = data.constructor.currentBlock();
+                    Block thenBlock = new Block(data.constructor.graph());
+                    Block elseBlock = new Block(data.constructor.graph());
+                    Block mergeBlock = new Block(data.constructor.graph());
+
+                    // Branch on lhs
+                    thenBlock.addPredecessor(condBlock);
+                    elseBlock.addPredecessor(condBlock);
+
+                    // Then branch: result is rhs
+                    data.constructor.setCurrentBlock(thenBlock);
+                    Node thenValue = rhs;
+                    mergeBlock.addPredecessor(thenBlock);
+
+                    // Else branch: result is 0 (false)
+                    data.constructor.setCurrentBlock(elseBlock);
+                    Node elseValue = data.constructor.newConstInt(0);
+                    mergeBlock.addPredecessor(elseBlock);
+
+                    // Merge
+                    data.constructor.setCurrentBlock(mergeBlock);
+                    Node phi = data.constructor.newPhi();
+                    ((Phi) phi).appendOperand(thenValue);
+                    ((Phi) phi).appendOperand(elseValue);
+
+                    // Restore current block to merge
+                    data.constructor.setCurrentBlock(mergeBlock);
+                    yield phi;
+                }
                 default ->
                     throw new IllegalArgumentException("not a binary expression operator " + binaryOperationTree.operatorType());
             };
