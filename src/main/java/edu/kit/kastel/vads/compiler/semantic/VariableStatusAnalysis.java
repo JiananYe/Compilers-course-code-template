@@ -106,7 +106,7 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
 
     @Override
     public Unit visit(ForTree tree, Namespace<VariableStatus> data) {
-        // Create a new scope for the for loop
+        // Create a new scope for the for loop (already present, but ensure body and step are in this scope)
         Namespace<VariableStatus> loopScope = new Namespace<>(data);
 
         // Analyze initializer (may declare a new variable)
@@ -117,12 +117,13 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         if (tree.condition() != null) {
             tree.condition().accept(this, loopScope);
         }
-        // Analyze body
+        // Analyze body in the loop scope
         tree.body().accept(this, loopScope);
-        // Analyze step
+        // Analyze step in the loop scope
         if (tree.step() != null) {
             tree.step().accept(this, loopScope);
         }
+        // Do NOT call super.visit(tree, data) to avoid double visitation
         return Unit.INSTANCE;
     }
 
@@ -159,5 +160,22 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         public String toString() {
             return name().toLowerCase(Locale.ROOT);
         }
+    }
+
+    static class VariableStatusPostorderVisitor extends edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor<Namespace<VariableStatus>, Unit> {
+        private final VariableStatusAnalysis customVisitor;
+        public VariableStatusPostorderVisitor(VariableStatusAnalysis visitor) {
+            super(visitor);
+            this.customVisitor = visitor;
+        }
+        @Override
+        public Unit visit(edu.kit.kastel.vads.compiler.parser.ast.ForTree tree, Namespace<VariableStatus> data) {
+            // Only call the custom visitor's method, not the default traversal
+            return customVisitor.visit(tree, data);
+        }
+    }
+
+    public static VariableStatusPostorderVisitor makePostorderVisitor() {
+        return new VariableStatusPostorderVisitor(new VariableStatusAnalysis());
     }
 }
