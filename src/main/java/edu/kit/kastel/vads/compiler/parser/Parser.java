@@ -42,6 +42,8 @@ import edu.kit.kastel.vads.compiler.lexer.BooleanLiteral;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
+
 public class Parser {
     private final TokenSource tokenSource;
 
@@ -50,23 +52,52 @@ public class Parser {
     }
 
     public ProgramTree parseProgram() {
-        ProgramTree programTree = new ProgramTree(List.of(parseFunction()));
-        if (this.tokenSource.hasMore()) {
-            throw new ParseException("expected end of input but got " + this.tokenSource.peek());
+        List<FunctionTree> functions = new ArrayList<>();
+        while (this.tokenSource.hasMore()) {
+            functions.add(parseFunction());
         }
-        return programTree;
+        if (functions.isEmpty()) {
+            throw new ParseException("expected at least one function definition");
+        }
+        return new ProgramTree(functions);
     }
 
     private FunctionTree parseFunction() {
-        Keyword returnType = this.tokenSource.expectKeyword(KeywordType.INT);
+        Keyword returnType = this.tokenSource.expectKeyword(KeywordType.INT, KeywordType.BOOL, KeywordType.VOID);
         Identifier identifier = this.tokenSource.expectIdentifier();
         this.tokenSource.expectSeparator(SeparatorType.PAREN_OPEN);
+        List<DeclarationTree> parameters = parseParameterList();
         this.tokenSource.expectSeparator(SeparatorType.PAREN_CLOSE);
         BlockTree body = parseBlock();
         return new FunctionTree(
-            new TypeTree(BasicType.INT, returnType.span()),
+            new TypeTree(BasicType.valueOf(returnType.type().name()), returnType.span()),
             name(identifier),
+            parameters,
             body
+        );
+    }
+
+    private List<DeclarationTree> parseParameterList() {
+        List<DeclarationTree> params = new ArrayList<>();
+        if (this.tokenSource.peek().isKeyword(KeywordType.INT) || this.tokenSource.peek().isKeyword(KeywordType.BOOL)) {
+            params.add(parseParameter());
+            while (this.tokenSource.peek().isSeparator(SeparatorType.COMMA)) {
+                this.tokenSource.expectSeparator(SeparatorType.COMMA);
+                params.add(parseParameter());
+            }
+        }
+        return params;
+    }
+
+    private DeclarationTree parseParameter() {
+        Keyword type = this.tokenSource.peek().isKeyword(KeywordType.INT)
+            ? this.tokenSource.expectKeyword(KeywordType.INT)
+            : this.tokenSource.expectKeyword(KeywordType.BOOL);
+        Identifier ident = this.tokenSource.expectIdentifier();
+        return new DeclarationTree(
+            new TypeTree(type.type() == KeywordType.INT ? BasicType.INT : BasicType.BOOL, type.span()),
+            name(ident),
+            null
         );
     }
 
@@ -413,7 +444,15 @@ public class Parser {
             }
             case Identifier ident -> {
                 this.tokenSource.consume();
-                yield new IdentExpressionTree(name(ident));
+                NameTree callee = name(ident);
+                if (this.tokenSource.peek().isSeparator(SeparatorType.PAREN_OPEN)) {
+                    this.tokenSource.expectSeparator(SeparatorType.PAREN_OPEN);
+                    List<ExpressionTree> args = parseArgumentList();
+                    this.tokenSource.expectSeparator(SeparatorType.PAREN_CLOSE);
+                    yield new CallExpressionTree(callee, args, callee.span());
+                } else {
+                    yield new IdentExpressionTree(callee);
+                }
             }
             case NumberLiteral(String value, int base, Span span) -> {
                 this.tokenSource.consume();
@@ -425,6 +464,18 @@ public class Parser {
             }
             case Token t -> throw new ParseException("invalid primary expression " + t);
         };
+    }
+
+    private List<ExpressionTree> parseArgumentList() {
+        List<ExpressionTree> args = new ArrayList<>();
+        if (!this.tokenSource.peek().isSeparator(SeparatorType.PAREN_CLOSE)) {
+            args.add(parseExpression());
+            while (this.tokenSource.peek().isSeparator(SeparatorType.COMMA)) {
+                this.tokenSource.expectSeparator(SeparatorType.COMMA);
+                args.add(parseExpression());
+            }
+        }
+        return args;
     }
 
     private LValueTree parseLValue() {

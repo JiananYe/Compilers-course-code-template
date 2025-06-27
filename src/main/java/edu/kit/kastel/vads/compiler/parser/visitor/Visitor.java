@@ -24,4 +24,5 @@ public interface Visitor<T, R> {
     R visit(LValueIdentTree tree, T data);
     R visit(NameTree tree, T data);
     R visit(TypeTree tree, T data);
+    R visit(CallExpressionTree tree, T data);
 }

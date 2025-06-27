@@ -16,7 +16,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
-
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
 import java.util.Locale;
 
 /// Checks that variables are
@@ -172,6 +172,26 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         return Unit.INSTANCE;
     }
 
+    @Override
+    public Unit visit(CallExpressionTree tree, Namespace<VariableStatus> data) {
+        tree.callee().accept(this, data);
+        for (var arg : tree.arguments()) {
+            arg.accept(this, data);
+        }
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    public Unit visit(edu.kit.kastel.vads.compiler.parser.ast.FunctionTree tree, Namespace<VariableStatus> data) {
+        // Mark all parameters as initialized
+        for (var param : tree.parameters()) {
+            data.put(param.name(), VariableStatus.INITIALIZED, (existing, replacement) -> replacement);
+        }
+        // Visit the function body
+        tree.body().accept(this, data);
+        return Unit.INSTANCE;
+    }
+
     enum VariableStatus {
         DECLARED,
         INITIALIZED;
@@ -192,6 +212,16 @@ class VariableStatusAnalysis implements NoOpVisitor<Namespace<VariableStatusAnal
         public Unit visit(edu.kit.kastel.vads.compiler.parser.ast.ForTree tree, Namespace<VariableStatus> data) {
             // Only call the custom visitor's method, not the default traversal
             return customVisitor.visit(tree, data);
+        }
+        @Override
+        public Unit visit(edu.kit.kastel.vads.compiler.parser.ast.FunctionTree tree, Namespace<VariableStatus> data) {
+            // Mark all parameters as initialized
+            for (var param : tree.parameters()) {
+                data.put(param.name(), VariableStatus.INITIALIZED, (existing, replacement) -> replacement);
+            }
+            // Visit the function body
+            tree.body().accept(this, data);
+            return Unit.INSTANCE;
         }
     }
 

@@ -34,13 +34,17 @@ public class TokenSource {
         return this.tokens.get(this.idx);
     }
 
-    public Keyword expectKeyword(KeywordType type) {
+    public Keyword expectKeyword(KeywordType... types) {
         Token token = peek();
-        if (!(token instanceof Keyword kw) || kw.type() != type) {
-            throw new ParseException("expected keyword '" + type + "' but got " + token);
+        if (token instanceof Keyword kw) {
+            for (KeywordType type : types) {
+                if (kw.type() == type) {
+                    this.idx++;
+                    return kw;
+                }
+            }
         }
-        this.idx++;
-        return kw;
+        throw new ParseException("expected one of keywords " + java.util.Arrays.toString(types) + " but got " + token);
     }
 
     public Separator expectSeparator(SeparatorType type) {

@@ -15,6 +15,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.BlockTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ExpressionTree;
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
 
 /// Checks that functions return.
 /// Currently only works for straight-line code.
@@ -148,6 +149,15 @@ class ReturnAnalysis implements NoOpVisitor<ReturnAnalysis.ReturnState> {
                 data.returns = true;
                 break; // Dead code after return
             }
+        }
+        return Unit.INSTANCE;
+    }
+
+    @Override
+    public Unit visit(CallExpressionTree tree, ReturnState data) {
+        tree.callee().accept(this, data);
+        for (var arg : tree.arguments()) {
+            arg.accept(this, data);
         }
         return Unit.INSTANCE;
     }

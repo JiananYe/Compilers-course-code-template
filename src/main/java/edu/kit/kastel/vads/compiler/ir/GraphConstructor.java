@@ -23,6 +23,7 @@ import edu.kit.kastel.vads.compiler.ir.node.NotEqualNode;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -238,6 +239,10 @@ class GraphConstructor {
     }
     public Node newXor(Node left, Node right) {
         return this.optimizer.transform(new edu.kit.kastel.vads.compiler.ir.node.XorNode(currentBlock(), left, right));
+    }
+
+    public Node newCall(String callee, List<Node> arguments) {
+        return new edu.kit.kastel.vads.compiler.ir.node.CallNode(currentBlock(), callee, arguments);
     }
 
 }

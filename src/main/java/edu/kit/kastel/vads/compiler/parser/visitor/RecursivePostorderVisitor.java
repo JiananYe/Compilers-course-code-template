@@ -22,6 +22,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.BreakTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
 
 /// A visitor that traverses a tree in postorder
 /// @param <T> a type for additional data
@@ -203,6 +204,16 @@ public class RecursivePostorderVisitor<T, R> implements Visitor<T, R> {
     @Override
     public R visit(BooleanLiteralTree tree, T data) {
         return this.visitor.visit(tree, data);
+    }
+
+    @Override
+    public R visit(CallExpressionTree tree, T data) {
+        R r = tree.callee().accept(this, data);
+        for (var arg : tree.arguments()) {
+            r = arg.accept(this, accumulate(data, r));
+        }
+        r = this.visitor.visit(tree, accumulate(data, r));
+        return r;
     }
 
     protected T accumulate(T data, R value) {

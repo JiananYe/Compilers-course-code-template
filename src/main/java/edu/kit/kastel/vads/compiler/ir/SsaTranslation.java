@@ -33,6 +33,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.symbol.Name;
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor;
 import edu.kit.kastel.vads.compiler.ir.node.Phi;
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -397,6 +398,7 @@ public class SsaTranslation {
                 @Override public Void visit(TypeTree t, SsaTranslation d) { return null; }
                 @Override public Void visit(FunctionTree t, SsaTranslation d) { return null; }
                 @Override public Void visit(ProgramTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(CallExpressionTree t, SsaTranslation d) { return null; }
             };
             tree.body().accept(assignmentTracker, data);
 
@@ -487,6 +489,7 @@ public class SsaTranslation {
                 @Override public Void visit(TypeTree t, SsaTranslation d) { return null; }
                 @Override public Void visit(FunctionTree t, SsaTranslation d) { return null; }
                 @Override public Void visit(ProgramTree t, SsaTranslation d) { return null; }
+                @Override public Void visit(CallExpressionTree t, SsaTranslation d) { return null; }
             };
             tree.body().accept(assignmentTracker, data);
             if (tree.step() != null) tree.step().accept(assignmentTracker, data);
@@ -667,6 +670,20 @@ public class SsaTranslation {
             Node node = data.constructor.newConstInt(tree.value() ? 1 : 0);
             popSpan();
             return Optional.of(node);
+        }
+
+        @Override
+        public Optional<Node> visit(CallExpressionTree callExpressionTree, SsaTranslation data) {
+            // Evaluate arguments
+            List<Node> argNodes = new java.util.ArrayList<>();
+            for (var arg : callExpressionTree.arguments()) {
+                argNodes.add(arg.accept(this, data).orElseThrow());
+            }
+            // Get callee name
+            String callee = callExpressionTree.callee().name().asString();
+            // Create CallNode
+            Node callNode = data.constructor.newCall(callee, argNodes);
+            return Optional.of(callNode);
         }
 
         private Node projResultDivMod(SsaTranslation data, Node divMod) {

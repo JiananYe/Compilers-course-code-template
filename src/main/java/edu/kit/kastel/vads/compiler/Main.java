@@ -1,14 +1,10 @@
 package edu.kit.kastel.vads.compiler;
 
-import edu.kit.kastel.vads.compiler.codegen.CodeGeneratorL2;
-import edu.kit.kastel.vads.compiler.ir.IrGraph;
-import edu.kit.kastel.vads.compiler.ir.SsaTranslation;
-import edu.kit.kastel.vads.compiler.ir.optimize.LocalValueNumbering;
+import edu.kit.kastel.vads.compiler.codegen.CodeGeneratorL3;
 import edu.kit.kastel.vads.compiler.lexer.Lexer;
 import edu.kit.kastel.vads.compiler.parser.ParseException;
 import edu.kit.kastel.vads.compiler.parser.Parser;
 import edu.kit.kastel.vads.compiler.parser.TokenSource;
-import edu.kit.kastel.vads.compiler.parser.ast.FunctionTree;
 import edu.kit.kastel.vads.compiler.parser.ast.ProgramTree;
 import edu.kit.kastel.vads.compiler.typechecker.TypeChecker;
 import edu.kit.kastel.vads.compiler.typechecker.TypeCheckException;
@@ -18,8 +14,6 @@ import edu.kit.kastel.vads.compiler.semantic.SemanticException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 public class Main {
     public static void main(String[] args) throws IOException {
@@ -51,15 +45,10 @@ public class Main {
             return;
         }
 
-        // Convert to IR and optimize
-        List<IrGraph> graphs = new ArrayList<>();
-        for (FunctionTree function : program.topLevelTrees()) {
-            SsaTranslation translation = new SsaTranslation(function, new LocalValueNumbering());
-            graphs.add(translation.translate());
-        }
-
-        // Generate code from IR
-        String assembly = new CodeGeneratorL2().generateCode(graphs);
+        // Generate code from AST using CodeGeneratorL3
+        CodeGeneratorL3 codegen = new CodeGeneratorL3();
+        program.accept(codegen, null);
+        String assembly = codegen.getCode();
         
         // Write assembly to file
         Path asmFile = output.resolveSibling(output.getFileName() + ".s");

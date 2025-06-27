@@ -12,6 +12,7 @@ import edu.kit.kastel.vads.compiler.parser.ast.ContinueTree;
 import edu.kit.kastel.vads.compiler.parser.ast.TernaryTree;
 import edu.kit.kastel.vads.compiler.parser.ast.BooleanLiteralTree;
 import edu.kit.kastel.vads.compiler.parser.ast.NegateTree;
+import edu.kit.kastel.vads.compiler.parser.ast.CallExpressionTree;
 
 public class IntegerLiteralRangeAnalysis implements NoOpVisitor<Namespace<Void>> {
 
@@ -67,5 +68,14 @@ public class IntegerLiteralRangeAnalysis implements NoOpVisitor<Namespace<Void>>
     @Override
     public Unit visit(NegateTree tree, Namespace<Void> data) {
         return NoOpVisitor.super.visit(tree, data);
+    }
+
+    @Override
+    public Unit visit(CallExpressionTree tree, Namespace<Void> data) {
+        tree.callee().accept(this, data);
+        for (var arg : tree.arguments()) {
+            arg.accept(this, data);
+        }
+        return Unit.INSTANCE;
     }
 }

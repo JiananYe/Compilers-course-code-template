@@ -6,14 +6,15 @@ import edu.kit.kastel.vads.compiler.parser.type.Type;
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor;
 import edu.kit.kastel.vads.compiler.lexer.Operator.OperatorType;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 
 public class TypeChecker implements Visitor<Void, Type> {
     private final Map<String, Type> variables = new HashMap<>();
     private final Stack<Boolean> inLoop = new Stack<>();
     private boolean hasReturn = false;
+    // L3 additions:
+    private final Map<String, FunctionSignature> functions = new HashMap<>();
+    private FunctionSignature currentFunction = null;
 
     public TypeChecker() {
         inLoop.push(false);
@@ -21,21 +22,52 @@ public class TypeChecker implements Visitor<Void, Type> {
 
     @Override
     public Type visit(ProgramTree tree, Void data) {
-        tree.topLevelTrees().forEach(f -> f.accept(this, data));
-        if (!hasReturn) {
-            throw new TypeCheckException("Program must have a return statement");
+        // Add built-in functions
+        functions.put("print", new FunctionSignature(BasicType.INT, List.of(BasicType.INT)));
+        functions.put("read", new FunctionSignature(BasicType.INT, List.of()));
+        functions.put("flush", new FunctionSignature(BasicType.INT, List.of()));
+        // Collect all function signatures
+        for (FunctionTree f : tree.topLevelTrees()) {
+            String name = f.name().name().asString();
+            if (functions.containsKey(name)) {
+                throw new TypeCheckException("Duplicate function: " + name);
+            }
+            List<Type> paramTypes = new ArrayList<>();
+            for (DeclarationTree param : f.parameters()) {
+                paramTypes.add(param.type().type());
+            }
+            functions.put(name, new FunctionSignature(f.returnType().type(), paramTypes));
+        }
+        // Check for main
+        FunctionSignature mainSig = functions.get("main");
+        if (mainSig == null) {
+            throw new TypeCheckException("Missing main function");
+        }
+        if (!mainSig.returnType.equals(BasicType.INT) || !mainSig.paramTypes.isEmpty()) {
+            throw new TypeCheckException("main must have signature: int main() (no parameters)");
+        }
+        // Type check all function bodies
+        for (FunctionTree f : tree.topLevelTrees()) {
+            currentFunction = functions.get(f.name().name().asString());
+            hasReturn = false;
+            // Add parameters to variable scope
+            variables.clear();
+            for (int i = 0; i < f.parameters().size(); i++) {
+                DeclarationTree param = f.parameters().get(i);
+                variables.put(param.name().name().asString(), param.type().type());
+            }
+            f.body().accept(this, data);
+            if (!hasReturn) {
+                throw new TypeCheckException("Function '" + f.name().name().asString() + "' must have a return statement");
+            }
         }
         return BasicType.INT;
     }
 
     @Override
     public Type visit(FunctionTree tree, Void data) {
-        hasReturn = false;
-        tree.body().accept(this, data);
-        if (!hasReturn) {
-            throw new TypeCheckException("Function must have a return statement");
-        }
-        return tree.returnType().type();
+        // Handled in visit(ProgramTree)
+        return null;
     }
 
     @Override
@@ -74,11 +106,33 @@ public class TypeChecker implements Visitor<Void, Type> {
     @Override
     public Type visit(ReturnTree tree, Void data) {
         Type exprType = tree.expression().accept(this, data);
-        if (!exprType.equals(BasicType.INT)) {
-            throw new TypeCheckException("Return expression must be of type int");
+        if (currentFunction == null) {
+            throw new TypeCheckException("Return statement outside of function");
+        }
+        if (!exprType.equals(currentFunction.returnType)) {
+            throw new TypeCheckException("Return expression must be of type " + currentFunction.returnType);
         }
         hasReturn = true;
         return null;
+    }
+
+    @Override
+    public Type visit(CallExpressionTree tree, Void data) {
+        String name = tree.callee().name().asString();
+        FunctionSignature sig = functions.get(name);
+        if (sig == null) {
+            throw new TypeCheckException("Call to undefined function: " + name);
+        }
+        if (tree.arguments().size() != sig.paramTypes.size()) {
+            throw new TypeCheckException("Function '" + name + "' expects " + sig.paramTypes.size() + " arguments, got " + tree.arguments().size());
+        }
+        for (int i = 0; i < sig.paramTypes.size(); i++) {
+            Type argType = tree.arguments().get(i).accept(this, data);
+            if (!argType.equals(sig.paramTypes.get(i))) {
+                throw new TypeCheckException("Argument " + (i+1) + " of function '" + name + "' must be of type " + sig.paramTypes.get(i));
+            }
+        }
+        return sig.returnType;
     }
 
     @Override
@@ -261,5 +315,14 @@ public class TypeChecker implements Visitor<Void, Type> {
     @Override
     public Type visit(TypeTree tree, Void data) {
         return null;
+    }
+
+    private static class FunctionSignature {
+        final Type returnType;
+        final List<Type> paramTypes;
+        FunctionSignature(Type returnType, List<Type> paramTypes) {
+            this.returnType = returnType;
+            this.paramTypes = List.copyOf(paramTypes);
+        }
     }
 } 
